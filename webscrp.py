@@ -87,19 +87,20 @@ def extrair_dados(driver, apenas_fcte=False):
             continue
 
         raw_sala = cells[7].text.strip().upper()
-        if apenas_fcte and not raw_sala.startswith("FCTE"):
+        if apenas_fcte and not (raw_sala.startswith("FCTE") or raw_sala.startswith("FGA")):
             continue
 
         turma = cells[0].text.strip()
         professor = re.sub(r'\s*\(\d+h\)', '', cells[2].text.strip())
         horarios = re.findall(r'\d+[MTN]\d+', cells[3].text.strip())
 
-        # remova parênteses antes de quebrar em '/'
-        # remove parênteses e o prefixo duplicado
-        clean = re.sub(r'\s*\([^)]*\)', '', raw_sala) \
-                    .replace('FCTE - ', '') \
-                    .strip()
-        salas = [s.strip() for s in clean.split('/')]
+        sem_prefixo = re.sub(r'^(?:FCTE|FGA)\s*-\s*', '', raw_sala)
+        clean = re.sub(r'\s*\([^)]*\)', '', sem_prefixo).strip()
+
+        if clean == "NIT/LDS":
+            salas = [clean]
+        else:
+            salas = [s.strip() for s in clean.split('/')]
 
         idx = 0
         for cod in horarios:
@@ -109,9 +110,8 @@ def extrair_dados(driver, apenas_fcte=False):
             dias, horario = resultado
             desc = f"TURMA {turma}\n{disciplina}\n Prof. {professor}"
             for dia in dias:
-                # aqui você sempre coloca o prefixo FCTE- na chave
-                sala = f"FCTE - {salas[min(idx, len(salas)-1)]}"
-                cronogramas[sala][dia].append(f"{horario} - {desc}")
+                nome_sala = f"FCTE - {salas[min(idx, len(salas)-1)]}"
+                cronogramas[nome_sala][dia].append(f"{horario} - {desc}")
                 idx += 1
 
     return cronogramas
@@ -151,7 +151,8 @@ def gerar_docx(cronogramas, filename='Mapa_de_Salas.docx'):
         '18h00\nàs\n19h00','19h00\nàs\n19h50','20h00\nàs\n21h00','21h00\nàs\n21h50','22h00\nàs\n23h50'
     ]
 
-    for sala, dias in cronogramas.items():
+    for sala in sorted(cronogramas.keys()):
+        dias = cronogramas[sala]
         doc.add_page_break()
         heading = doc.add_heading(f"Sala: {sala}", level=1)
         heading.alignment = WD_ALIGN_PARAGRAPH.CENTER
@@ -174,12 +175,12 @@ def gerar_docx(cronogramas, filename='Mapa_de_Salas.docx'):
             if tem_noite:
                 break
 
-        # Criar lista de dias a mostrar (remover sábado se não tiver)
+        # Criar lista de dias a mostrar (remove sábado se não tiver)
         dias_a_mostrar = dias_da_semana[:-1]  # segunda a sexta
         if tem_sabado:
             dias_a_mostrar.append('Sábado')
 
-        # Criar lista de horários a mostrar (remover noite se não tiver)
+        # Criar lista de horários a mostrar (remove noite se não tiver)
         if tem_noite:
             horarios_a_mostrar = horarios_manha_tarde + horarios_noite
         else:
@@ -190,10 +191,9 @@ def gerar_docx(cronogramas, filename='Mapa_de_Salas.docx'):
         table.style = 'Table Grid'
         table.autofit = False
 
-        tbl = table._tbl         # nó CT_Tbl
-        tblPr = tbl.tblPr        # CT_TblPr ou None
+        tbl = table._tbl         
+        tblPr = tbl.tblPr        
 
-        # Se não existir, cria e injeta
         if tblPr is None:
             tblPr = OxmlElement('w:tblPr')
             tbl.insert(0, tblPr)
@@ -222,7 +222,7 @@ def gerar_docx(cronogramas, filename='Mapa_de_Salas.docx'):
         else:
             other_col_width_emu = remaining_width_emu
 
-        # 4) aplica larguras personalizadas **uma única vez**
+        # 4) aplica larguras personalizadas
         for idx, col in enumerate(table.columns):
             w = fixed_col_width_emu if idx == 0 else other_col_width_emu
             for cell in col.cells:
@@ -296,7 +296,6 @@ def gerar_docx(cronogramas, filename='Mapa_de_Salas.docx'):
 driver, wait = configurar_driver()
 fechar_modal_cookies()
 
-# 1) Posição 2 (tudo)
 selecionar_departamento_por_indice(wait, 2)
 cronogramas_principais = coletar_dados_por_departamento(wait, driver, apenas_fcte=False)
 
@@ -318,3 +317,15 @@ for depto in extras:
 
 gerar_docx(cronogramas_principais)
 driver.quit()
+
+#Limitações do programa:
+# Má formatação do nome das Salas
+# Matérias com 3 salas
+
+#Dúvidas
+# Matérias com 2 dias  e 3 salas
+# Diferença de códigos no sigaa e material do chiquinho
+
+#Não consta
+# Monitorias
+# Eventos
