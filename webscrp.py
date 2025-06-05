@@ -8,7 +8,7 @@ from webdriver_manager.chrome import ChromeDriverManager
 from docx import Document
 from docx.shared import Pt, Cm
 from docx.enum.text import WD_ALIGN_PARAGRAPH
-from docx.enum.table import WD_ALIGN_VERTICAL, WD_TABLE_ALIGNMENT
+from docx.enum.table import WD_ALIGN_VERTICAL
 from docx.oxml.ns import qn
 from docx.oxml import OxmlElement
 from collections import defaultdict
@@ -115,10 +115,6 @@ def extrair_dados(driver, apenas_fcte=False):
                 idx += 1
 
     return cronogramas
-
-# === COLETAR POR DEPARTAMENTO ===
-def coletar_dados_por_departamento(wait, driver, apenas_fcte=False):
-    return extrair_dados(driver, apenas_fcte=apenas_fcte)
 
 # === FONTE ===
 def set_font_times_new_roman(doc):
@@ -297,7 +293,7 @@ driver, wait = configurar_driver()
 fechar_modal_cookies()
 
 selecionar_departamento_por_indice(wait, 2)
-cronogramas_principais = coletar_dados_por_departamento(wait, driver, apenas_fcte=False)
+cronogramas_principais = extrair_dados(driver, apenas_fcte=False)
 
 # departamentos extras com filtro FCTE
 extras = [
@@ -310,7 +306,7 @@ extras = [
 
 for depto in extras:
     selecionar_departamento_por_nome(wait, depto)
-    cronos = coletar_dados_por_departamento(wait, driver, apenas_fcte=True)
+    cronos = extrair_dados(driver, apenas_fcte=True)
     for sala, dias in cronos.items():
         for dia, aulas in dias.items():
             cronogramas_principais[sala][dia].extend(aulas)
