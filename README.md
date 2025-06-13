@@ -87,3 +87,12 @@ extras = [
 
 Adicione o nome exato do departamento como aparece na lista do SIGAA. Isso fará com que essas turmas também sejam consideradas na geração do documento.
 
+---
+
+##Regras: 
+
+Todas as salas devem ter o prefixo FCTE
+A quantidade de salas da turma deve ser igual a quantidade de blocos do horario (slot de tempo sem intervalos)
+
+
+
