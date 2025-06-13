@@ -93,6 +93,7 @@ Adicione o nome exato do departamento como aparece na lista do SIGAA. Isso fará
 
 * Todas as salas devem ter o prefixo FCTE
 * A quantidade de salas da turma deve ser um ou igual a quantidade de blocos do horario separados por "/" (slot de tempo sem intervalos)
+* O nome da salas devem estar padronizados
 
 
 
