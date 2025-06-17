@@ -1,4 +1,5 @@
 from selenium import webdriver
+from selenium.common.exceptions import TimeoutException, NoSuchElementException, ElementClickInterceptedException
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import Select, WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
@@ -6,115 +7,250 @@ from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
 from webdriver_manager.chrome import ChromeDriverManager
 from docx import Document
-from docx.shared import Pt, Cm
-from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.shared import Pt, Cm, Inches
+from docx.enum.text import WD_PARAGRAPH_ALIGNMENT
+from docx.enum.table import WD_TABLE_ALIGNMENT, WD_ALIGN_VERTICAL
 from docx.enum.table import WD_ALIGN_VERTICAL
 from docx.oxml.ns import qn
-from docx.oxml import OxmlElement
 from collections import defaultdict
 import re, time
+from datetime import datetime, timedelta
+import traceback
+import sys
 
 # === CONFIGURAÇÃO DO DRIVER ===
 def configurar_driver():
-    options = Options()
-    service = Service(ChromeDriverManager().install())
-    driver = webdriver.Chrome(service=service, options=options)
-    driver.get("https://sigaa.unb.br/sigaa/public/turmas/listar.jsf?aba=p-ensino")
-    return driver, WebDriverWait(driver, 10)
+    print("Configurando o driver do Chrome...")
+    try:
+        options = Options()
+        options.add_argument("--headless")
+        options.add_argument("--no-sandbox")
+        options.add_argument("--disable-dev-shm-usage")
+        options.add_argument("--disable-gpu")
+        service = Service(ChromeDriverManager().install())
+        driver = webdriver.Chrome(service=service, options=options)
+        driver.get("https://sigaa.unb.br/sigaa/public/turmas/listar.jsf?aba=p-ensino")
+        return driver, WebDriverWait(driver, 10)
+    except Exception as e:
+        print(f"ERRO ao configurar o driver: {str(e)}")
+        print(traceback.format_exc())
+        raise
 
 # === FECHAR O MODAL DE COOKIES ===
-def fechar_modal_cookies():
+def fechar_modal_cookies(wait):
+    print("Verificando modal de cookies...")
     try:
         cookie_modal = wait.until(EC.visibility_of_element_located((By.ID, "sigaa-cookie-consent")))
         cookie_modal.find_element(By.XPATH, ".//button[contains(text(), 'Ciente')]").click()
-    except:
-        pass
+        print("Modal de cookies fechado com sucesso.")
+    except Exception as e:
+        print(f"Aviso: Modal de cookies não encontrado ou erro ao fechar: {str(e)}")
 
 # === INTERAÇÕES INICIAIS ===
 def selecionar_departamento_por_indice(wait, index):
-    Select(wait.until(EC.presence_of_element_located((By.ID, "formTurma:inputNivel")))).select_by_index(2)
-    Select(wait.until(EC.presence_of_element_located((By.ID, "formTurma:inputDepto")))).select_by_index(index)
-    wait.until(EC.element_to_be_clickable((By.XPATH, "//input[@value='Buscar']"))).click()
-    time.sleep(5)
+    try:
+        Select(wait.until(EC.presence_of_element_located((By.ID, "formTurma:inputNivel")))).select_by_index(2)
+        Select(wait.until(EC.presence_of_element_located((By.ID, "formTurma:inputDepto")))).select_by_index(index)
+        wait.until(EC.element_to_be_clickable((By.XPATH, "//input[@value='Buscar']"))).click()
+        time.sleep(5)
+    except (TimeoutException, NoSuchElementException, ElementClickInterceptedException, IndexError) as e:
+        print(f"[ERRO] Falha ao selecionar departamento por índice {index}: {e}")
+    except Exception as e:
+        print(f"[ERRO INESPERADO] {e}")
 
 def selecionar_departamento_por_nome(wait, nome):
-    Select(wait.until(EC.presence_of_element_located((By.ID, "formTurma:inputNivel")))).select_by_index(2)
-    select_depto = Select(wait.until(EC.presence_of_element_located((By.ID, "formTurma:inputDepto"))))
-    for option in select_depto.options:
-        if nome.lower() in option.text.lower():
-            select_depto.select_by_visible_text(option.text)
-            break
-    wait.until(EC.element_to_be_clickable((By.XPATH, "//input[@value='Buscar']"))).click()
-    time.sleep(5)
+    try:
+        Select(wait.until(EC.presence_of_element_located((By.ID, "formTurma:inputNivel")))).select_by_index(2)
+        select_depto = Select(wait.until(EC.presence_of_element_located((By.ID, "formTurma:inputDepto"))))
+        for option in select_depto.options:
+            if nome.lower() in option.text.lower():
+                select_depto.select_by_visible_text(option.text)
+                break
+        else:
+            raise ValueError(f"Departamento com nome '{nome}' não encontrado.")
+        
+        wait.until(EC.element_to_be_clickable((By.XPATH, "//input[@value='Buscar']"))).click()
+        time.sleep(5)
+    except (TimeoutException, NoSuchElementException, ElementClickInterceptedException) as e:
+        print(f"[ERRO] Falha ao selecionar departamento por nome '{nome}': {e}")
+    except ValueError as e:
+        print(f"[AVISO] {e}")
+    except Exception as e:
+        print(f"[ERRO INESPERADO] {e}")
 
-# === CONVERSÃO DE CÓDIGOS DE HORÁRIO ===
+# === LÓGICA DE CÓDIGOS DE HORÁRIO SUPORTANDO MULTI-TURNOS ===
+HORARIOS_BASE = {
+    'M': {1: "08:00", 2: "09:00", 3: "10:00", 4: "11:00", 5: "12:00"},
+    'T': {1: "13:00", 2: "14:00", 3: "15:00", 4: "16:00", 5: "17:00", 6: "18:00"},
+    'N': {1: "19:00"}
+}
+
+def agrupar_consecutivos_numeros(nums):
+    try:
+        if not nums:
+            return []
+
+        grupos = []
+        temp = [nums[0]]
+
+        for n in nums[1:]:
+            if n == temp[-1] + 1:
+                temp.append(n)
+            else:
+                grupos.append(temp)
+                temp = [n]
+
+        grupos.append(temp)
+        return grupos
+
+    except (IndexError, TypeError) as e:
+        print(f"[ERRO] Falha ao agrupar números consecutivos: {e}")
+        return []
+    except Exception as e:
+        print(f"[ERRO INESPERADO] Erro desconhecido ao agrupar: {e}")
+        return []
+
 def converter_codigo(codigo):
-    dias_semana = {'2': 'Segunda', '3': 'Terça', '4': 'Quarta', '5': 'Quinta', '6': 'Sexta', '7': 'Sábado'}
-    match = re.match(r"(\d+)([MTN])(\d+)", codigo)
-    if not match:
+    try:
+        pattern = re.compile(r"(\d+)([MTN]+)(\d+)")
+        m = pattern.match(codigo.strip())
+        if not m:
+            return None
+
+        dias_str, turnos_str, blocos_str = m.groups()
+        dias_semana = {'2': 'Segunda', '3': 'Terça', '4': 'Quarta', '5': 'Quinta', '6': 'Sexta', '7': 'Sábado'}
+        dias = [dias_semana[d] for d in dias_str if d in dias_semana]
+
+        flatten = []
+        for t in turnos_str:
+            if t in HORARIOS_BASE:
+                for b in sorted(HORARIOS_BASE[t].keys()):
+                    flatten.append((t, b))
+
+        indices = [int(ch) - 1 for ch in blocos_str if 0 <= int(ch) - 1 < len(flatten)]
+
+        if not indices:
+            return dias, []  # Nenhum horário válido encontrado
+
+        grupos = agrupar_consecutivos_numeros(indices)
+
+        periodos = []
+        for g in grupos:
+            start_idx = g[0]
+            dur_min = (len(g) - 1) * 60 + 50
+            t0, b0 = flatten[start_idx]
+            inicio = datetime.strptime(HORARIOS_BASE[t0][b0], "%H:%M")
+            fim = inicio + timedelta(minutes=dur_min)
+            periodos.append(f"{inicio.strftime('%Hh%M')}–{fim.strftime('%Hh%M')}")
+
+        return dias, periodos
+
+    except (KeyError, ValueError, IndexError) as e:
+        print(f"[ERRO] Código de horário malformado ou inválido: '{codigo}'. Detalhes: {e}")
+        return None
+    except Exception as e:
+        print(f"[ERRO INESPERADO] Falha ao processar código '{codigo}': {e}")
         return None
 
-    dias, turno, blocos = match.groups()
-    horarios = {
-        'M': ['08h00\nàs\n09h00','09h00\nàs\n9h50','10h00\nàs\n11h00','11h00\nàs\n11h50','12h00\nàs\n13h50'],
-        'T': ['13h00\nàs\n13h50','14h00\nàs\n15h00','15h00\nàs\n15h50','16h00\nàs\n17h00','17h00\nàs\n17h50'],
-        'N': ['18h00\nàs\n19h00','19h00\nàs\n19h50','20h00\nàs\n21h00','21h00\nàs\n21h50','22h00\nàs\n23h50']
-    }
-
-    dias_lista = [dias_semana[d] for d in dias]
-    horarios_lista = [horarios[turno][int(b)-1] for b in blocos if 1 <= int(b) <= 5]
-    return dias_lista, ", ".join(horarios_lista)
-
-# === EXTRAÇÃO DE DADOS DA TABELA ===
+# === EXTRAÇÃO DE DADOS ===
 def extrair_dados(driver, apenas_fcte=False):
-    table = driver.find_element(By.CLASS_NAME, "listagem")
-    rows = table.find_elements(By.TAG_NAME, "tr")
-    cronogramas = defaultdict(lambda: defaultdict(list))
-    disciplina = professor = turma = "?"
+    print("Extraindo dados da tabela...")
+    try:
+        table = driver.find_element(By.CLASS_NAME, "listagem")
+        rows = table.find_elements(By.TAG_NAME, "tr")
+        cron = defaultdict(lambda: defaultdict(list))
 
-    for row in rows[1:]:
-        try:
-            disciplina = row.find_element(By.CLASS_NAME, "tituloDisciplina").text.strip()
-            continue
-        except:
-            pass
+        codigo_disciplina = ""
+        nome_disciplina = ""
 
-        if not any(cl in row.get_attribute("class") for cl in ['linhaPar', 'linhaImpar']):
-            continue
-
-        cells = row.find_elements(By.TAG_NAME, "td")
-        if len(cells) < 8:
-            continue
-
-        raw_sala = cells[7].text.strip().upper()
-        if apenas_fcte and not (raw_sala.startswith("FCTE") or raw_sala.startswith("FGA")):
-            continue
-
-        turma = cells[0].text.strip()
-        professor = re.sub(r'\s*\(\d+h\)', '', cells[2].text.strip())
-        horarios = re.findall(r'\d+[MTN]\d+', cells[3].text.strip())
-
-        sem_prefixo = re.sub(r'^(?:FCTE|FGA)\s*-\s*', '', raw_sala)
-        clean = re.sub(r'\s*\([^)]*\)', '', sem_prefixo).strip()
-
-        if clean == "NIT/LDS":
-            salas = [clean]
-        else:
-            salas = [s.strip() for s in clean.split('/')]
-
-        idx = 0
-        for cod in horarios:
-            resultado = converter_codigo(cod)
-            if not resultado:
+        for row in rows[1:]:
+            try:
+                # Atualiza o código e nome da disciplina (linha de título)
+                titulo = row.find_element(By.CLASS_NAME, "tituloDisciplina").text.strip()
+                partes = titulo.split(" ", 1)
+                if len(partes) == 2:
+                    codigo_disciplina, nome_disciplina = partes
                 continue
-            dias, horario = resultado
-            desc = f"TURMA {turma}\n{disciplina}\n Prof. {professor}"
-            for dia in dias:
-                nome_sala = f"FCTE - {salas[min(idx, len(salas)-1)]}"
-                cronogramas[nome_sala][dia].append(f"{horario} - {desc}")
-                idx += 1
+            except Exception:
+                pass  # Não é linha de título
 
-    return cronogramas
+            if not any(cl in row.get_attribute("class") for cl in ['linhaPar', 'linhaImpar']):
+                continue
+
+            try:
+                cells = row.find_elements(By.TAG_NAME, "td")
+                if len(cells) < 8:
+                    continue
+
+                raw_sala = cells[7].text.strip().upper()
+                if apenas_fcte and not raw_sala.startswith(('FCTE', 'FGA')):
+                    continue
+
+                turma = cells[0].text.strip()
+                professor = re.sub(r'\s*\(\d+h\)', '', cells[2].text.strip())
+                professor = professor.lower().title()
+                cods = re.findall(r'\d+[MTN]+\d+', cells[3].text.strip())
+
+                clean = re.sub(r'^(?:FCTE|FGA)\s*-\s*', '', raw_sala)
+                clean = re.sub(r'\s*\([^)]*\)', '', clean).strip()
+                salas = [clean] if clean == 'NIT/LDS' else [s.strip() for s in clean.split('/')]
+
+                for cod in cods:
+                    try:
+                        conv = converter_codigo(cod)
+                        if not conv:
+                            continue
+                        dias, periodos = conv
+                        for i, dia in enumerate(dias):
+                            sala = f"FCTE - {salas[min(i, len(salas)-1)]}"
+                            for per in periodos:
+                                try:
+                                    inicio, fim = per.split('–')
+                                    cron[sala][dia].append({
+                                        'inicio': inicio,
+                                        'fim': fim,
+                                        'codigo': codigo_disciplina,
+                                        'turma': turma,
+                                        'disciplina': nome_disciplina,
+                                        'docente': professor
+                                    })
+                                except Exception as e:
+                                    print(f"[ERRO] Falha ao dividir horário: {per} - {e}")
+                    except Exception as e:
+                        print(f"[ERRO] Erro ao converter código de horário '{cod}': {e}")
+
+            except Exception as e:
+                print(f"[ERRO] Falha ao processar linha de turma: {e}")
+
+        return cron
+
+    except Exception as e:
+        print(f"[ERRO CRÍTICO] Falha ao extrair dados da tabela: {e}")
+        return defaultdict(lambda: defaultdict(list))
+
+# === CRIAÇÃO DO DOCUMENTO DINÂMICO ===
+HORARIOS_FIXOS = [
+    ("08h00", "09h50"),
+    ("10h00", "11h50"),
+    ("12h00", "13h50"),
+    ("14h00", "15h50"),
+    ("16h00", "17h50"),
+    ("18h00", "19h50")
+]
+
+# Função utilitária para converter horário em minutos
+def horario_para_minutos(horario):
+    return int(horario[:2]) * 60 + int(horario[3:])
+
+# Mapeia dias para colunas na tabela
+dia_para_coluna = {
+    "2": 1,  # Segunda
+    "3": 2,  # Terça
+    "4": 3,  # Quarta
+    "5": 4,  # Quinta
+    "6": 5,  # Sexta
+    "7": 6   # Sábado
+}
 
 # === FONTE ===
 def set_font_times_new_roman(doc):
@@ -125,203 +261,203 @@ def set_font_times_new_roman(doc):
     rFonts.set(qn('w:eastAsia'), 'Times New Roman')
 
 # === MARGEM ===
-def definir_margens(doc, cm_valor=1):
+def definir_margens(doc, cm_valor):
     for section in doc.sections:
         section.top_margin = Cm(cm_valor)
         section.bottom_margin = Cm(cm_valor)
         section.left_margin = Cm(cm_valor)
         section.right_margin = Cm(cm_valor)
 
-# === CRIAÇÃO DO DOCUMENTO ===
-def gerar_docx(cronogramas, filename='Mapa_de_Salas.docx'):
+def gerar_docx(cronogramas, filename="Mapa_de_Salas.docx"):
+    print(f"Gerando DOCX: {filename}")
+    print(f"Total de salas a processar: {len(cronogramas)}")
     doc = Document()
     set_font_times_new_roman(doc)
-    definir_margens(doc, 1)
+    definir_margens(doc, 0.5)
+    for i, (sala, horarios) in enumerate(sorted(cronogramas.items()), start=1):
+        print(f"[{i}/{len(cronogramas)}] Processando sala: {sala}")
+        doc.add_heading(f"Sala {sala}", level=1)
+        dias_semana_base = ["Horário", "Segunda", "Terça", "Quarta", "Quinta", "Sexta"]
+        inclui_sabado = "Sábado" in horarios
+        if inclui_sabado:
+            dias_semana = dias_semana_base + ["Sábado"]
+        else:
+            dias_semana = dias_semana_base
 
-    dias_da_semana = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado']
-    horarios_manha_tarde = [
-        '08h00\nàs\n09h00','09h00\nàs\n9h50','10h00\nàs\n11h00','11h00\nàs\n11h50','12h00\nàs\n13h50',
-        '13h00\nàs\n13h50','14h00\nàs\n15h00','15h00\nàs\n15h50','16h00\nàs\n17h00','17h00\nàs\n17h50'
-    ]
-    horarios_noite = [
-        '18h00\nàs\n19h00','19h00\nàs\n19h50','20h00\nàs\n21h00','21h00\nàs\n21h50','22h00\nàs\n23h50'
-    ]
-
-    for sala in sorted(cronogramas.keys()):
-        dias = cronogramas[sala]
+        # cria tabela com número de colunas baseado em dias_semana
+        tabela = doc.add_table(rows=7, cols=len(dias_semana))
+        tabela.alignment = WD_TABLE_ALIGNMENT.CENTER
+        tabela.style = 'Table Grid'
+        tabela.autofit = False
         doc.add_page_break()
-        heading = doc.add_heading(f"Sala: {sala}", level=1)
-        heading.alignment = WD_ALIGN_PARAGRAPH.CENTER
 
-        # Verificar se tem sábado
-        tem_sabado = 'Sábado' in dias and len(dias['Sábado']) > 0
+        for row in tabela.rows:
+            row.cells[0].width = Cm(2)
 
-        # Verificar se tem aulas noturnas
-        tem_noite = False
-        for dia_aulas in dias.values():
-            for entrada in dia_aulas:
-                blocos, _ = entrada.split(" - ", 1)
-                blocos_lista = blocos.split(', ')
-                for bloco in blocos_lista:
-                    if bloco in horarios_noite:
-                        tem_noite = True
-                        break
-                if tem_noite:
-                    break
-            if tem_noite:
-                break
-
-        # Criar lista de dias a mostrar (remove sábado se não tiver)
-        dias_a_mostrar = dias_da_semana[:-1]  # segunda a sexta
-        if tem_sabado:
-            dias_a_mostrar.append('Sábado')
-
-        # Criar lista de horários a mostrar (remove noite se não tiver)
-        if tem_noite:
-            horarios_a_mostrar = horarios_manha_tarde + horarios_noite
-        else:
-            horarios_a_mostrar = horarios_manha_tarde
-
-        # Criar a tabela com número de linhas e colunas corretos
-        table = doc.add_table(rows=len(horarios_a_mostrar)+1, cols=len(dias_a_mostrar)+1)
-        table.style = 'Table Grid'
-        table.autofit = False
-
-        tbl = table._tbl         
-        tblPr = tbl.tblPr        
-
-        if tblPr is None:
-            tblPr = OxmlElement('w:tblPr')
-            tbl.insert(0, tblPr)
-
-        # 1) fixa o layout em “fixed”
-        tblLayout = OxmlElement('w:tblLayout')
-        tblLayout.set(qn('w:type'), 'fixed')
-        tblPr.append(tblLayout)
-
-        # 2) define a largura total da tabela
-        section = doc.sections[0]
-        usable_width_emu = section.page_width - section.left_margin - section.right_margin
-        usable_width_twips = int(usable_width_emu * 1440 / 914400)
-
-        tblW = OxmlElement('w:tblW')
-        tblW.set(qn('w:w'), str(usable_width_twips))
-        tblW.set(qn('w:type'), 'dxa')
-        tblPr.append(tblW)
-
-        # 3) calcula larguras especiais
-        fixed_col_width_emu = Cm(2)  # primeira coluna: 2 cm
-        total_cols = len(dias_a_mostrar) + 1
-        remaining_width_emu = usable_width_emu - fixed_col_width_emu
-        if total_cols > 1:
-            other_col_width_emu = remaining_width_emu // (total_cols - 1)
-        else:
-            other_col_width_emu = remaining_width_emu
-
-        # 4) aplica larguras personalizadas
-        for idx, col in enumerate(table.columns):
-            w = fixed_col_width_emu if idx == 0 else other_col_width_emu
-            for cell in col.cells:
-                cell.width = w
-
-
-        # Cabeçalho da tabela
-        table.cell(0, 0).text = 'Horário'
-        for c, dia in enumerate(dias_a_mostrar, 1):
-            table.cell(0, c).text = dia
-
-        # Coluna de horários
-        for r, horario in enumerate(horarios_a_mostrar, 1):
-            cell = table.cell(r, 0)
+        # 1) Cabeçalho fixo com dias
+        for col_idx, titulo in enumerate(dias_semana):
+            cell = tabela.cell(0, col_idx)
+            cell.text = titulo
             cell.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
-            para = cell.paragraphs[0]
-            para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-            run = para.add_run(horario)
-            run.bold = True
-            run.font.size = Pt(14)
+            p = cell.paragraphs[0]
+            p.alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
+            p.runs[0].bold = True
 
-        # Preenchimento da tabela com as aulas
-        for dia, entradas in dias.items():
-            if dia not in dias_a_mostrar:
+        # 2) Primeira coluna: horários fixos, altura exata
+        for i, (inicio, fim) in enumerate(HORARIOS_FIXOS, start=1):
+            cell_h = tabela.cell(i, 0)
+            p = cell_h.paragraphs[0]
+            p.clear() 
+
+            run_inicio = p.add_run(inicio)
+            run_inicio.bold = True
+            p.add_run('\n')
+
+            run_entre = p.add_run("às")
+            run_entre.bold = True
+            p.add_run('\n')
+
+            run_fim = p.add_run(fim)
+            run_fim.bold = True
+
+            p.alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
+            cell_h.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
+
+        # 3) Preencher aulas
+        for dia_nome, aulas in horarios.items():
+            if dia_nome not in dias_semana:
                 continue
-            c = dias_a_mostrar.index(dia) + 1
-            for entrada in entradas:
-                blocos, desc = entrada.split(" - ", 1)
-                for bloco in blocos.split(', '):
-                    if bloco not in horarios_a_mostrar:
-                        continue
-                    r = horarios_a_mostrar.index(bloco) + 1
-                    cell = table.cell(r, c)
-                    cell.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
-                    para = cell.paragraphs[0]
-                    para.clear()
-                    para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            col = dias_semana.index(dia_nome)
+            for aula in aulas:
+                mi = horario_para_minutos(aula['inicio'])
+                mf = horario_para_minutos(aula['fim'])
+                for idx, (bi_str, bf_str) in enumerate(HORARIOS_FIXOS, start=1):
+                    bi = horario_para_minutos(bi_str)
+                    bf = horario_para_minutos(bf_str)
+                    if mi < bf and mf > bi:
+                        cell = tabela.cell(idx, col)
+                        # calcula duração do segmento dentro desta célula
+                        overlap_inicio = max(mi, bi)
+                        overlap_fim    = min(mf, bf)
+                        dur = overlap_fim - overlap_inicio  # em minutos
 
-                    linhas = desc.strip().split('\n')
-                    turma_txt = linhas[0].strip()
-                    if len(linhas) > 1:
-                        if ' - ' in linhas[1]:
-                            codigo_mat, nome_mat = linhas[1].split(' - ', 1)
+                        if dur >= (bf - bi):  
+                            # ocupa a célula inteira
+                            p = cell.paragraphs[0]
+                            p.clear()
+
+                            # Código da disciplina (negrito, 14pt)
+                            run_codigo = p.add_run(aula['codigo'])
+                            run_codigo.bold = True
+                            run_codigo.font.size = Pt(14)
+
+                            p.add_run('\n')
+
+                            # TURMA em negrito, tamanho 13
+                            run_turma = p.add_run(f"TURMA {aula['turma']}")
+                            run_turma.bold = True
+                            run_turma.font.size = Pt(13)
+
+                            p.add_run('\n')
+
+                            # Nome da disciplina em itálico, tamanho 12
+                            run_disc = p.add_run(aula['disciplina'].lstrip('-').strip().lower().title())
+                            run_disc.italic = True
+                            run_disc.font.size = Pt(12)
+
+                            p.add_run('\n')
+
+                            # Nome do professor já como você faz:
+                            run_prof = p.add_run(f"Prof. {aula['docente']}")
+                            run_prof.font.size = Pt(10)
+
+                            p.alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
+                            cell.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
+
                         else:
-                            codigo_mat, nome_mat = linhas[1], ""
-                    else:
-                        codigo_mat, nome_mat = "", ""
+                            p = cell.paragraphs[0]
+                            p.clear()
 
-                    prof = linhas[2] if len(linhas) > 2 else ""
+                            run_codigo = p.add_run(aula['codigo'])
+                            run_codigo.bold = True
+                            run_codigo.font.size = Pt(14)
 
-                    # Inserção formatada
-                    run = para.add_run(codigo_mat + "\n")
-                    run.bold = True
-                    run.font.size = Pt(14)
+                            p.add_run('\n')
 
-                    run = para.add_run(turma_txt + "\n")
-                    run.bold = True
-                    run.font.size = Pt(13)
+                            # TURMA em negrito, tamanho 13
+                            run_turma = p.add_run(f"TURMA {aula['turma']}")
+                            run_turma.bold = True
+                            run_turma.font.size = Pt(13)
 
-                    run = para.add_run(nome_mat.lower().title() + "\n")
-                    run.italic = True
-                    run.font.size = Pt(12)
+                            p.add_run('\n')
 
-                    run = para.add_run(' '.join(p.capitalize() for p in prof.split()))
-                    run.font.size = Pt(10)
+                            # Nome da disciplina em itálico, tamanho 12
+                            run_disc = p.add_run(aula['disciplina'].lstrip('-').strip().lower().title())
+                            run_disc.italic = True
+                            run_disc.font.size = Pt(12)
+
+                            p.add_run('\n')
+
+                            run_prof = p.add_run(f"Prof. {aula['docente']}")
+                            run_prof.font.size = Pt(10)
+
+                            p.alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
+                            cell.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
+
+        # Espaço para próxima sala
+        doc.add_paragraph()
 
     doc.save(filename)
     print(f"Documento gerado: {filename}")
 
-# === EXECUÇÃO ===
-driver, wait = configurar_driver()
-fechar_modal_cookies()
+# === MAIN ===
+import traceback
 
-selecionar_departamento_por_indice(wait, 2)
-cronogramas_principais = extrair_dados(driver, apenas_fcte=False)
+def executar_scraping():
+    try:
+        print("Iniciando processo de scraping do SIGAA...")
+        driver, wait = configurar_driver()
+        fechar_modal_cookies(wait)
+        selecionar_departamento_por_indice(wait, 2)
+        cron_main = extrair_dados(driver)
+        
+        departamentos = [
+            "CAMPUS UNB GAMA: FACULDADE DE CIÊNCIAS E TECNOLOGIAS EM ENGENHARIA - BRASÍLIA",
+            "INSTITUTO DE FÍSICA - BRASÍLIA",
+            "INSTITUTO DE QUÍMICA - BRASÍLIA",
+            "DEPARTAMENTO DE MATEMÁTICA - BRASÍLIA",
+            "DEPARTAMENTO DE ENGENHARIA MECANICA - BRASÍLIA",
+            "DEPTO CIÊNCIAS DA COMPUTAÇÃO - BRASÍLIA"
+        ]
+        
+        for i, depto in enumerate(departamentos, 1):
+            print(f"\n[{i}/{len(departamentos)}] Processando departamento: {depto}")
+            selecionar_departamento_por_nome(wait, depto)
+            cron_ex = extrair_dados(driver, apenas_fcte=True)
+            for s, d in cron_ex.items():
+                for dia, aulas in d.items():
+                    cron_main[s][dia].extend(aulas)
+        
+        arquivo = "Mapa_de_Salas.docx"
+        gerar_docx(cron_main, arquivo)
+        driver.quit()
+        print("Processo de scraping concluído com sucesso!")
+        return True, arquivo
+    
+    except Exception as e:
+        print(f"Erro durante o scraping: {str(e)}")
+        return False, str(e)
 
-# departamentos extras com filtro FCTE
-extras = [
-    "INSTITUTO DE FÍSICA - BRASÍLIA",
-    "INSTITUTO DE QUÍMICA - BRASÍLIA",
-    "DEPARTAMENTO DE MATEMÁTICA - BRASÍLIA",
-    "DEPARTAMENTO DE ENGENHARIA MECANICA - BRASÍLIA",
-    "DEPTO CIÊNCIAS DA COMPUTAÇÃO - BRASÍLIA"
-]
-
-for depto in extras:
-    selecionar_departamento_por_nome(wait, depto)
-    cronos = extrair_dados(driver, apenas_fcte=True)
-    for sala, dias in cronos.items():
-        for dia, aulas in dias.items():
-            cronogramas_principais[sala][dia].extend(aulas)
-
-gerar_docx(cronogramas_principais)
-driver.quit()
-
-#Limitações do programa:
-# Má formatação do nome das Salas
-# Matérias com 3 salas
-
-#Dúvidas
-# Matérias com 2 dias  e 3 salas
-# Diferença de códigos no sigaa e material do chiquinho
-
-#Não consta
-# Monitorias
-# Eventos
+# Execução direta do script
+if __name__ == "__main__":
+    try:
+        success, result = executar_scraping()
+        if success:
+            sys.exit(0)
+        else:
+            print(f"Erro: {result}")
+            sys.exit(1)
+    except Exception as e:
+        print(f"Erro crítico: {str(e)}")
+        print(traceback.format_exc())
+        sys.exit(1)
