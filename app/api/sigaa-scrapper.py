@@ -140,7 +140,7 @@ def converter_codigo(codigo):
         indices = [int(ch) - 1 for ch in blocos_str if 0 <= int(ch) - 1 < len(flatten)]
 
         if not indices:
-            return dias, []  # Nenhum horário válido encontrado
+            return dias, []
 
         grupos = agrupar_consecutivos_numeros(indices)
 
@@ -205,29 +205,27 @@ def extrair_dados(driver, apenas_fcte=False):
                 clean = re.sub(r'\s*\([^)]*\)', '', clean).strip()
                 salas = [clean] if clean == 'NIT/LDS' else [s.strip() for s in clean.split('/')]
 
+                dias_base = ["Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"]
                 for cod in cods:
-                    try:
-                        conv = converter_codigo(cod)
-                        if not conv:
-                            continue
-                        dias, periodos = conv
-                        for i, dia in enumerate(dias):
-                            sala = f"FCTE - {salas[min(i, len(salas)-1)]}"
-                            for per in periodos:
-                                try:
-                                    inicio, fim = per.split('–')
-                                    cron[sala][dia].append({
-                                        'inicio': inicio,
-                                        'fim': fim,
-                                        'codigo': codigo_disciplina,
-                                        'turma': turma,
-                                        'disciplina': nome_disciplina,
-                                        'docente': professor
-                                    })
-                                except Exception as e:
-                                    print(f"[ERRO] Falha ao dividir horário: {per} - {e}")
-                    except Exception as e:
-                        print(f"[ERRO] Erro ao converter código de horário '{cod}': {e}")
+                    dias, periodos = converter_codigo(cod)
+                    for dia in dias:
+                        idx = dias_base.index(dia)
+                        sala = f"FCTE - {salas[min(idx, len(salas)-1)]}"
+                        for per in periodos:
+                            try:
+                                inicio, fim = per.split('–')
+                                cron[sala][dia].append({
+                                    'inicio': inicio,
+                                    'fim': fim,
+                                    'codigo': codigo_disciplina,
+                                    'turma': turma,
+                                    'disciplina': nome_disciplina,
+                                    'docente': professor
+                                })
+                            except Exception as e:
+                                print(f"[ERRO] Falha ao dividir horário: {per} - {e}")
+            except Exception as e:
+                print(f"[ERRO] Erro ao converter código de horário '{cod}': {e}")
 
             except Exception as e:
                 print(f"[ERRO] Falha ao processar linha de turma: {e}")
