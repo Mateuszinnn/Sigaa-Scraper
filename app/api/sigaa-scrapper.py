@@ -17,6 +17,16 @@ import re, time
 from datetime import datetime, timedelta
 import traceback
 import sys
+import io
+import os
+
+sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
+sys.stdin.reconfigure(encoding='utf-8')
+sys.stdout.reconfigure(encoding='utf-8', line_buffering=True)
+sys.stderr.reconfigure(encoding='utf-8', line_buffering=True)
+sys.stdout = os.fdopen(sys.stdout.fileno(), 'w', buffering=1)
+sys.stderr = os.fdopen(sys.stderr.fileno(), 'w', buffering=1)
 
 # === CONFIGURAÇÃO DO DRIVER ===
 def configurar_driver():
@@ -311,13 +321,16 @@ def gerar_docx(cronogramas, filename="Mapa_de_Salas.docx"):
 
             run_inicio = p.add_run(inicio)
             run_inicio.bold = True
+            run_inicio.font.size = Pt(14)
             p.add_run('\n')
 
             run_entre = p.add_run("às")
+            run_entre.font.size = Pt(14)
             run_entre.bold = True
             p.add_run('\n')
 
             run_fim = p.add_run(fim)
+            run_fim.font.size = Pt(14)
             run_fim.bold = True
 
             p.alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
