@@ -456,7 +456,7 @@ def executar_scraping():
         cron_main = extrair_dados(driver)
         
         departamentos = [
-            "INSTITUT DE FÍSICA - BRASÍLIA",
+            "INSTITUTO DE FÍSICA - BRASÍLIA",
             "INSTITUTO DE QUÍMICA - BRASÍLIA",
             "DEPARTAMENTO DE MATEMÁTICA - BRASÍLIA",
             "DEPARTAMENTO DE ENGENHARIA MECANICA - BRASÍLIA",
