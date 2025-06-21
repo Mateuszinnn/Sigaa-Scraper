@@ -58,6 +58,7 @@ def fechar_modal_cookies(wait):
 
 # === INTERAÇÕES INICIAIS ===
 def selecionar_departamento_por_indice(wait, index):
+    print("[1/6] Processando departamento:  CAMPUS UNB GAMA: FACULDADE DE CIÊNCIAS E TECNOLOGIAS EM ENGENHARIA - BRASÍLIA")
     try:
         Select(wait.until(EC.presence_of_element_located((By.ID, "formTurma:inputNivel")))).select_by_index(2)
         Select(wait.until(EC.presence_of_element_located((By.ID, "formTurma:inputDepto")))).select_by_index(index)
@@ -84,7 +85,7 @@ def selecionar_departamento_por_nome(wait, nome):
     except (TimeoutException, NoSuchElementException, ElementClickInterceptedException) as e:
         print(f"[ERRO] Falha ao selecionar departamento por nome '{nome}': {e}")
     except ValueError as e:
-        print(f"[AVISO] {e}")
+        print(f"[ERRO] {e}")
     except Exception as e:
         print(f"[ERRO INESPERADO] {e}")
 
@@ -172,17 +173,17 @@ def extrair_dados(driver, apenas_fcte=False):
 
         codigo_disciplina = ""
         nome_disciplina = ""
+        DIAS_ORDEM = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado']
 
         for row in rows[1:]:
             try:
-                # Atualiza o código e nome da disciplina (linha de título)
                 titulo = row.find_element(By.CLASS_NAME, "tituloDisciplina").text.strip()
                 partes = titulo.split(" ", 1)
                 if len(partes) == 2:
                     codigo_disciplina, nome_disciplina = partes
                 continue
             except Exception:
-                pass  # Não é linha de título
+                pass
 
             if not any(cl in row.get_attribute("class") for cl in ['linhaPar', 'linhaImpar']):
                 continue
@@ -203,30 +204,68 @@ def extrair_dados(driver, apenas_fcte=False):
 
                 clean = re.sub(r'^(?:FCTE|FGA)\s*-\s*', '', raw_sala)
                 clean = re.sub(r'\s*\([^)]*\)', '', clean).strip()
-                salas = [clean] if clean == 'NIT/LDS' else [s.strip() for s in clean.split('/')]
-
-                dias_base = ["Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"]
-                for cod in cods:
-                    dias, periodos = converter_codigo(cod)
-                    for dia in dias:
-                        idx = dias_base.index(dia)
-                        sala = f"FCTE - {salas[min(idx, len(salas)-1)]}"
-                        for per in periodos:
+                salas = [clean] if clean == 'NIT/LDS' else [s.strip() for s in clean.split('/')]             
+                   
+                # ===== NOVA LÓGICA DE ALOÇÃO DE SALAS =====
+                eventos = []
+                for cod_idx, cod in enumerate(cods):
+                    convertido = converter_codigo(cod)
+                    if not convertido:
+                        continue
+                    dias_list, periodos_list = convertido
+                    for dia in dias_list:
+                        for per in periodos_list:
+                            # Extrair horário de início para ordenação
+                            inicio_str = per.split('–')[0].strip()
                             try:
-                                inicio, fim = per.split('–')
-                                cron[sala][dia].append({
-                                    'inicio': inicio,
-                                    'fim': fim,
-                                    'codigo': codigo_disciplina,
-                                    'turma': turma,
-                                    'disciplina': nome_disciplina,
-                                    'docente': professor
-                                })
-                            except Exception as e:
-                                print(f"[ERRO] Falha ao dividir horário: {per} - {e}")
-            except Exception as e:
-                print(f"[ERRO] Erro ao converter código de horário '{cod}': {e}")
-
+                                if 'h' in inicio_str:
+                                    h, m = inicio_str.split('h')
+                                    total_min = int(h)*60 + int(m)
+                                else:
+                                    total_min = int(inicio_str)*60  # Fallback
+                            except:
+                                total_min = 0
+                            eventos.append((dia, per, total_min, cod_idx))
+                
+                # Ordenar eventos por dia e horário
+                eventos_ordenados = sorted(
+                    eventos, 
+                    key=lambda x: (DIAS_ORDEM.index(x[0]) if x[0] in DIAS_ORDEM else 99, x[2])
+                )
+                
+                # Verificar padrões de alocação
+                num_eventos = len(eventos_ordenados)
+                dias_unicos = sorted(set(e[0] for e in eventos_ordenados), 
+                                    key=lambda d: DIAS_ORDEM.index(d))
+                num_dias = len(dias_unicos)
+                
+                # Distribuir salas
+                for idx, evento in enumerate(eventos_ordenados):
+                    dia, per, _, cod_idx = evento
+                    
+                    if len(salas) == len(cods):        # alocação por código (nova prioridade)
+                        sala = salas[cod_idx]
+                    elif len(salas) == num_dias:       # alocação por dia
+                        sala_idx = dias_unicos.index(dia)
+                        sala = salas[sala_idx]
+                    elif len(salas) == num_eventos:    # alocação por evento
+                        sala = salas[idx]
+                    else:                              # fallback cíclico
+                        sala = salas[idx % len(salas)]
+                    
+                    # Registrar evento
+                    inicio, fim = per.split('–')
+                    sala_completa = f"FCTE - {sala.strip()}"
+                    cron[sala_completa][dia].append({
+                        'inicio': inicio.strip(),
+                        'fim': fim.strip(),
+                        'codigo': codigo_disciplina,
+                        'turma': turma,
+                        'disciplina': nome_disciplina,
+                        'docente': professor
+                    })
+                # ===== FIM DA NOVA LÓGICA =====
+                    
             except Exception as e:
                 print(f"[ERRO] Falha ao processar linha de turma: {e}")
 
@@ -319,16 +358,16 @@ def gerar_docx(cronogramas, filename="Mapa_de_Salas.docx"):
 
             run_inicio = p.add_run(inicio)
             run_inicio.bold = True
-            run_inicio.font.size = Pt(14)
+            run_inicio.font.size = Pt(13)
             p.add_run('\n')
 
             run_entre = p.add_run("às")
-            run_entre.font.size = Pt(14)
+            run_entre.font.size = Pt(13)
             run_entre.bold = True
             p.add_run('\n')
 
             run_fim = p.add_run(fim)
-            run_fim.font.size = Pt(14)
+            run_fim.font.size = Pt(13)
             run_fim.bold = True
 
             p.alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
@@ -433,7 +472,6 @@ def executar_scraping():
         cron_main = extrair_dados(driver)
         
         departamentos = [
-            "CAMPUS UNB GAMA: FACULDADE DE CIÊNCIAS E TECNOLOGIAS EM ENGENHARIA - BRASÍLIA",
             "INSTITUTO DE FÍSICA - BRASÍLIA",
             "INSTITUTO DE QUÍMICA - BRASÍLIA",
             "DEPARTAMENTO DE MATEMÁTICA - BRASÍLIA",
@@ -442,7 +480,7 @@ def executar_scraping():
         ]
         
         for i, depto in enumerate(departamentos, 1):
-            print(f"\n[{i}/{len(departamentos)}] Processando departamento: {depto}")
+            print(f"\n[{i+1}/{len(departamentos)+1}] Processando departamento: {depto}")
             selecionar_departamento_por_nome(wait, depto)
             cron_ex = extrair_dados(driver, apenas_fcte=True)
             for s, d in cron_ex.items():

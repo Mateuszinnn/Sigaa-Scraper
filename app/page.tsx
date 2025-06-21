@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from "react"
 import { Button } from "@/components/ui/button"
-import { Calendar, Clock, School, FileText, AlertTriangle } from "lucide-react"
+import { Calendar, Clock, School, FileText, AlertTriangle, Sparkles } from "lucide-react"
 import { useToast } from "@/app/hooks/use-toast"
 import LogViewer from "@/components/log-viewer"
 import { motion, AnimatePresence } from "framer-motion"
@@ -11,7 +11,9 @@ import { Badge } from "@/components/ui/badge"
 import { cn } from "@/app/lib/utils"
 import { useIsMobile } from "@/app/hooks/use-mobile"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import logo from '@/app/assets/image.png'
 
+interface Particle { left: number; top: number; duration: number; delay: number; }
 // Constantes para animações - facilita ajustes e melhora performance
 const ANIMATION_CONFIG = {
   headerAnimation: {
@@ -41,6 +43,90 @@ const ANIMATION_CONFIG = {
   },
 }
 
+const AnimatedBackground = () => {
+  return (
+    <div className="fixed inset-0 -z-10 overflow-hidden">
+      {/* Gradiente base */}
+      <div className="absolute inset-0 bg-gradient-to-br from-indigo-50 via-purple-50 to-blue-50 dark:from-gray-900 dark:via-purple-900/20 dark:to-indigo-900/20" />
+
+      {/* Orbs flutuantes */}
+      <motion.div
+        className="absolute top-1/4 left-1/4 w-96 h-96 bg-gradient-to-r from-blue-400/20 to-purple-400/20 rounded-full blur-3xl"
+        animate={{
+          x: [0, 100, 0],
+          y: [0, -50, 0],
+          scale: [1, 1.1, 1],
+        }}
+        transition={{
+          duration: 20,
+          repeat: Number.POSITIVE_INFINITY,
+          ease: "easeInOut",
+        }}
+      />
+      <motion.div
+        className="absolute top-3/4 right-1/4 w-80 h-80 bg-gradient-to-r from-purple-400/20 to-pink-400/20 rounded-full blur-3xl"
+        animate={{
+          x: [0, -80, 0],
+          y: [0, 60, 0],
+          scale: [1, 0.9, 1],
+        }}
+        transition={{
+          duration: 25,
+          repeat: Number.POSITIVE_INFINITY,
+          ease: "easeInOut",
+        }}
+      />
+      <motion.div
+        className="absolute top-1/2 left-3/4 w-64 h-64 bg-gradient-to-r from-indigo-400/20 to-blue-400/20 rounded-full blur-3xl"
+        animate={{
+          x: [0, -60, 0],
+          y: [0, -80, 0],
+          scale: [1, 1.2, 1],
+        }}
+        transition={{
+          duration: 18,
+          repeat: Number.POSITIVE_INFINITY,
+          ease: "easeInOut",
+        }}
+      />
+    </div>
+  )
+}
+
+// Componente de partículas flutuantes (background)
+const FloatingParticles = () => {
+  const isMobile = useIsMobile();
+  const count = isMobile ? 15 : 30;
+
+  // 1) estado vazio na primeira renderização (SSR e primeiro cliente)
+  const [particles, setParticles] = useState<Particle[]>([]);
+
+  // 2) depois que monta no cliente, preenche com valores aleatórios
+  useEffect(() => {
+    const p = Array.from({ length: count }).map<Particle>(() => ({
+      left: Math.random() * 100,
+      top:  Math.random() * 100,
+      duration: Math.random() * 3 + 2,
+      delay:    Math.random() * 2,
+    }));
+    setParticles(p);
+  }, [count]);
+
+  return (
+    <div className="fixed inset-0 z-0 pointer-events-none">
+      {particles.map(({ left, top, duration, delay }, i) => (
+        <motion.div
+          key={i}
+          className="absolute w-1 h-1 bg-blue-400/70 rounded-full"
+          style={{ left: `${left}%`, top: `${top}%` }}
+          animate={{ y: [-20, -100], opacity: [0,1,0] }}
+          transition={{ duration, repeat: Infinity, delay, ease: "easeOut" }}
+        />
+      ))}
+    </div>
+  );
+};
+
 export default function Home() {
   const [loading, setLoading] = useState(false)
   const [success, setSuccess] = useState(false)
@@ -49,11 +135,9 @@ export default function Home() {
   const [downloadReady, setDownloadReady] = useState(false)
   const [activeTab, setActiveTab] = useState("gerar")
   const { toast } = useToast()
-  const [showSuccessEffect, setShowSuccessEffect] = useState(false)
   const isMobile = useIsMobile()
-
-  // Reduz o número de partículas em dispositivos móveis para melhorar performance
-  const particleCount = useMemo(() => (isMobile ? 15 : 30), [isMobile])
+  const [showSuccessEffect, setShowSuccessEffect] = useState(false)
+  const particleCount = useMemo(() => (isMobile ? 25 : 50), [isMobile])
 
   // Efeito para animação de sucesso - otimizado
   useEffect(() => {
@@ -71,51 +155,63 @@ const fetchCronograma = useCallback(async () => {
   setLoading(true);
   setLogs(["Iniciando coleta..."]);
   setActiveTab("logs");
+  setError(null);
+  setSuccess(false);
+  setDownloadReady(false);
 
   try {
     const eventSource = new EventSource("/api/executar");
 
     eventSource.onmessage = (event) => {
       const data = JSON.parse(event.data);
-      
+
       if (data.log) {
-        setLogs(prev => [...prev, data.log]);
+        setLogs((prev) => [...prev, data.log]);
       }
-      
+
       if (data.success !== undefined) {
         eventSource.close();
+
         if (data.success) {
           setSuccess(true);
           setDownloadReady(true);
           setActiveTab("gerar");
           toast({ title: "Sucesso!", description: "Cronograma gerado" });
         } else {
-          throw new Error(data.message || "Erro na geração");
+          setError(data.message || "Erro na geração");
+          toast({
+            title: "Erro",
+            description: data.message || "Erro na geração",
+            variant: "destructive",
+          });
         }
+
+        setLoading(false); // <- Desliga loading aqui
       }
     };
 
     eventSource.onerror = () => {
       eventSource.close();
-      throw new Error("Erro na conexão com o servidor");
-    };
-
-  } catch (error) {
-      console.error("Erro ao buscar cronograma:", error)
-      setError(error instanceof Error ? error.message : String(error))
-      setLogs((prev) => [...prev, `Erro: ${error instanceof Error ? error.message : String(error)}`])
-
+      setLoading(false); // <- Também desliga loading em erro
+      setError("Erro na conexão com o servidor");
       toast({
         title: "Erro",
-        description: `Ocorreu um erro ao gerar o cronograma: ${error instanceof Error ? error.message : String(error)}`,
+        description: "Erro na conexão com o servidor",
         variant: "destructive",
-      })
-    } finally {
-      setTimeout(() => {
-        setLoading(false)
-      }, 500)
-    }
-  }, [toast])
+      });
+    };
+  } catch (error) {
+    console.error("Erro ao buscar cronograma:", error);
+    setError(error instanceof Error ? error.message : String(error));
+    setLogs((prev) => [...prev, `Erro: ${error instanceof Error ? error.message : String(error)}`]);
+    toast({
+      title: "Erro",
+      description: `Ocorreu um erro ao gerar o cronograma: ${error instanceof Error ? error.message : String(error)}`,
+      variant: "destructive",
+    });
+    setLoading(false); // <- desliga loading no catch também
+  }
+}, [toast]);
 
   const downloadDocx = useCallback(async () => {
     try {
@@ -167,7 +263,7 @@ const fetchCronograma = useCallback(async () => {
   }, [toast])
 
   // Memoize o componente de partículas para evitar re-renderizações
-  const SuccessParticles = useMemo(() => {
+   const SuccessParticles = useMemo(() => {
     if (!showSuccessEffect) return null
 
     return (
@@ -181,52 +277,68 @@ const fetchCronograma = useCallback(async () => {
           {Array.from({ length: particleCount }).map((_, i) => (
             <motion.div
               key={i}
-              className="absolute w-2 h-2 rounded-full bg-green-500"
+              className="absolute rounded-full"
+              style={{
+                width: Math.random() * 8 + 4,
+                height: Math.random() * 8 + 4,
+                background: `linear-gradient(45deg, ${
+                  ["#3B82F6", "#8B5CF6", "#06B6D4", "#10B981", "#F59E0B"][Math.floor(Math.random() * 5)]
+                }, ${["#1D4ED8", "#7C3AED", "#0891B2", "#059669", "#D97706"][Math.floor(Math.random() * 5)]})`,
+              }}
               initial={{
                 opacity: 1,
-                x: "50%",
-                y: "50%",
+                x: "50vw",
+                y: "50vh",
+                scale: 0,
               }}
               animate={{
                 opacity: 0,
-                x: `${50 + (Math.random() - 0.5) * 80}%`,
-                y: `${50 + (Math.random() - 0.5) * 80}%`,
-                scale: 0,
+                x: `${50 + (Math.random() - 0.5) * 100}vw`,
+                y: `${50 + (Math.random() - 0.5) * 100}vh`,
+                scale: [0, 1, 0],
+                rotate: Math.random() * 360,
               }}
               transition={{
-                duration: 1.2,
+                duration: 1.5 + Math.random(),
                 ease: "easeOut",
-                delay: Math.random() * 0.15,
+                delay: Math.random() * 0.3,
               }}
             />
           ))}
+
+          {/* Texto de sucesso central */}
+          <motion.div
+            initial={{ opacity: 0, scale: 0.5 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.5 }}
+            className="absolute inset-0 flex items-center justify-center"
+          >
+            <div className="bg-white/90 dark:bg-gray-800/90 backdrop-blur-lg rounded-2xl p-6 shadow-2xl border border-white/20">
+              <div className="flex items-center space-x-3">
+                <Sparkles className="h-8 w-8 text-yellow-500" />
+                <span className="text-2xl font-bold bg-gradient-to-r from-green-600 to-blue-600 bg-clip-text text-transparent">
+                  Sucesso!
+                </span>
+              </div>
+            </div>
+          </motion.div>
         </div>
       </motion.div>
     )
   }, [showSuccessEffect, particleCount])
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-purple-50 to-blue-50 dark:from-gray-900 dark:via-gray-900 dark:to-gray-800">
-      {/* Efeito de partículas de sucesso - agora usando componente memoizado */}
+    <div className="min-h-screen">
+      <AnimatedBackground />
+      <FloatingParticles />
       <AnimatePresence>{SuccessParticles}</AnimatePresence>
 
       <main className="container mx-auto py-8 px-4">
         <motion.div {...ANIMATION_CONFIG.headerAnimation} className="text-center mb-12">
-          <div className="inline-flex items-center justify-center p-2 bg-white dark:bg-gray-800 rounded-full shadow-lg mb-4">
-            <motion.div
-              animate={{ rotate: 360 }}
-              transition={{
-                duration: 20,
-                repeat: Number.POSITIVE_INFINITY,
-                ease: "linear",
-                type: "tween",
-              }}
-              className="text-blue-600 dark:text-blue-400"
-            >
-              <School className="h-10 w-10" />
-            </motion.div>
+          <div className="inline-flex items-center justify-center p-2">
+            <img src={logo.src} alt="Logo" />
           </div>
-          <h1 className="text-4xl md:text-5xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-purple-600 dark:from-blue-400 dark:to-purple-400">
+          <h1 className="text-4xl md:text-5xl font-bold text-[#01356f] dark:text-[#01356f]">
             Sistema de Mapa de Salas
           </h1>
           <p className="mt-4 text-gray-600 dark:text-gray-300 max-w-2xl mx-auto">
@@ -265,7 +377,7 @@ const fetchCronograma = useCallback(async () => {
               <TabsContent value="gerar" className="mt-0">
                 <motion.div
                   {...ANIMATION_CONFIG.tabContentAnimation}
-                  className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-lg rounded-2xl shadow-xl overflow-hidden border border-gray-100 dark:border-gray-700"
+                  className="bg-white/10 dark:bg-white/5 backdrop-blur-2xl rounded-3xl shadow-2xl overflow-hidden border border-white/20"
                   layout="position"
                 >
                   <div className="p-8">
@@ -278,12 +390,14 @@ const fetchCronograma = useCallback(async () => {
                         variant="outline"
                         className={cn(
                           "px-3 py-1 text-xs font-medium rounded-full",
-                          success
-                            ? "bg-green-100 text-green-800 border-green-200 dark:bg-green-900/30 dark:text-green-400 dark:border-green-800"
-                            : "bg-blue-100 text-blue-800 border-blue-200 dark:bg-blue-900/30 dark:text-blue-400 dark:border-blue-800",
+                          loading
+                            ? "bg-yellow-100 text-yellow-800 border-yellow-200 dark:bg-yellow-900/30 dark:text-yellow-400 dark:border-yellow-800"
+                            : success
+                              ? "bg-green-100 text-green-800 border-green-200 dark:bg-green-900/30 dark:text-green-400 dark:border-green-800"
+                              : "bg-blue-100 text-blue-800 border-blue-200 dark:bg-blue-900/30 dark:text-blue-400 dark:border-blue-800"
                         )}
                       >
-                        {success ? "Concluído" : "Pronto para gerar"}
+                        {loading ? "Gerando..." : success ? "Concluído" : "Pronto para gerar"}
                       </Badge>
                     </div>
 
@@ -298,7 +412,7 @@ const fetchCronograma = useCallback(async () => {
                     <div className="space-y-6">
                       <div className="bg-blue-50 dark:bg-gray-800/50 p-4 rounded-xl">
                         <p className="text-gray-700 dark:text-gray-300">
-                          Este sistema irá gerar um mapa completo de salas processando todos os departamentos
+                          Este sistema irá gerar um mapa completo de salas processando os departamentos definidos
                           disponíveis no SIGAA. O processo pode levar alguns minutos. Você pode acompanhar o progresso
                           na aba "Logs do Sistema".
                         </p>
@@ -310,7 +424,7 @@ const fetchCronograma = useCallback(async () => {
                             <Button
                               onClick={fetchCronograma}
                               disabled={loading}
-                              className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white py-6 rounded-xl shadow-lg hover:shadow-xl transition-all duration-200 text-lg font-medium"
+                              className="w-full bg-gradient-to-r from-[#01356f] to-[#01356f] hover:from-[#081d3d] hover:to-[#081d3d] text-white py-6 rounded-xl shadow-lg hover:shadow-xl transition-all duration-200 text-lg font-medium"
                             >
                               {loading ? (
                                 <div className="flex items-center justify-center">
@@ -399,7 +513,7 @@ const fetchCronograma = useCallback(async () => {
               <TabsContent value="logs" className="mt-0">
                 <motion.div
                   {...ANIMATION_CONFIG.tabContentAnimation}
-                  className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-lg rounded-2xl shadow-xl overflow-hidden border border-gray-100 dark:border-gray-700"
+                  className="bg-white/10 dark:bg-white/5 backdrop-blur-2xl rounded-3xl shadow-2xl overflow-hidden border border-white/20"
                 >
                   <div className="p-8">
                     <div className="flex items-center justify-between mb-6">
