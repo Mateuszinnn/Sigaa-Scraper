@@ -1,8 +1,8 @@
 "use client"
 
-import { useState, useEffect, useCallback, useMemo } from "react"
+import { useState, useEffect, useCallback, useMemo, useRef } from "react"
 import { Button } from "@/components/ui/button"
-import { Calendar, Clock, School, FileText, AlertTriangle, Sparkles } from "lucide-react"
+import { Calendar, Clock, School, FileText, AlertTriangle, Sparkles, Play, Square } from "lucide-react"
 import { useToast } from "@/app/hooks/use-toast"
 import LogViewer from "@/components/log-viewer"
 import { motion, AnimatePresence } from "framer-motion"
@@ -137,6 +137,9 @@ export default function Home() {
   const { toast } = useToast()
   const isMobile = useIsMobile()
   const [showSuccessEffect, setShowSuccessEffect] = useState(false)
+  const [connectionStatus, setConnectionStatus] = useState<"disconnected" | "connecting" | "connected">("disconnected")
+  const eventSourceRef = useRef<EventSource | null>(null)
+  const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const particleCount = useMemo(() => (isMobile ? 25 : 50), [isMobile])
 
   // Efeito para animação de sucesso - otimizado
@@ -150,6 +153,20 @@ export default function Home() {
     }
   }, [success])
 
+  const stopProcess = useCallback(() => {
+    if (eventSourceRef.current) {
+      eventSourceRef.current.close()
+      eventSourceRef.current = null
+    }
+    if (reconnectTimeoutRef.current) {
+      clearTimeout(reconnectTimeoutRef.current)
+      reconnectTimeoutRef.current = null
+    }
+    setLoading(false)
+    setConnectionStatus("disconnected")
+    setLogs((prev) => [...prev, "Processo interrompido pelo usuário."])
+  }, [])
+
   // Memoize funções para evitar re-renderizações desnecessárias
 const fetchCronograma = useCallback(async () => {
   setLoading(true);
@@ -161,8 +178,9 @@ const fetchCronograma = useCallback(async () => {
 
   try {
     const eventSource = new EventSource("/api/executar");
+    eventSourceRef.current = eventSource;
 
-    eventSource.onmessage = (event) => {
+    eventSource.onmessage = (event: MessageEvent) => {
       const data = JSON.parse(event.data);
 
       if (data.log) {
@@ -186,13 +204,13 @@ const fetchCronograma = useCallback(async () => {
           });
         }
 
-        setLoading(false); // <- Desliga loading aqui
+        setLoading(false);
       }
     };
 
     eventSource.onerror = () => {
       eventSource.close();
-      setLoading(false); // <- Também desliga loading em erro
+      setLoading(false);
       setError("Erro na conexão com o servidor");
       toast({
         title: "Erro",
@@ -200,18 +218,20 @@ const fetchCronograma = useCallback(async () => {
         variant: "destructive",
       });
     };
-  } catch (error) {
+  } catch (error: any) {
     console.error("Erro ao buscar cronograma:", error);
-    setError(error instanceof Error ? error.message : String(error));
-    setLogs((prev) => [...prev, `Erro: ${error instanceof Error ? error.message : String(error)}`]);
+    const message = error instanceof Error ? error.message : String(error);
+    setError(message);
+    setLogs((prev) => [...prev, `Erro: ${message}`]);
     toast({
       title: "Erro",
-      description: `Ocorreu um erro ao gerar o cronograma: ${error instanceof Error ? error.message : String(error)}`,
+      description: `Ocorreu um erro ao gerar o cronograma: ${message}`,
       variant: "destructive",
     });
-    setLoading(false); // <- desliga loading no catch também
+    setLoading(false);
   }
 }, [toast]);
+
 
   const downloadDocx = useCallback(async () => {
     try {
@@ -422,41 +442,26 @@ const fetchCronograma = useCallback(async () => {
                         <div className="flex-1">
                           <motion.div {...ANIMATION_CONFIG.buttonHoverAnimation} className="w-full">
                             <Button
-                              onClick={fetchCronograma}
-                              disabled={loading}
-                              className="w-full bg-gradient-to-r from-[#01356f] to-[#01356f] hover:from-[#081d3d] hover:to-[#081d3d] text-white py-6 rounded-xl shadow-lg hover:shadow-xl transition-all duration-200 text-lg font-medium"
-                            >
-                              {loading ? (
-                                <div className="flex items-center justify-center">
-                                  <svg
-                                    className="animate-spin -ml-1 mr-3 h-5 w-5 text-white"
-                                    xmlns="http://www.w3.org/2000/svg"
-                                    fill="none"
-                                    viewBox="0 0 24 24"
-                                  >
-                                    <circle
-                                      className="opacity-25"
-                                      cx="12"
-                                      cy="12"
-                                      r="10"
-                                      stroke="currentColor"
-                                      strokeWidth="4"
-                                    ></circle>
-                                    <path
-                                      className="opacity-75"
-                                      fill="currentColor"
-                                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                                    ></path>
-                                  </svg>
-                                  Gerando cronograma...
-                                </div>
-                              ) : (
-                                <span className="flex items-center justify-center">
-                                  <Calendar className="mr-2 h-5 w-5" />
-                                  Gerar Cronograma
-                                </span>
-                              )}
-                            </Button>
+                            onClick={loading ? stopProcess : fetchCronograma}
+                            className={cn(
+                              "w-full h-16 rounded-2xl shadow-2xl text-lg font-bold transition-all duration-300 transform",
+                              loading
+                                ? "bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white shadow-red-500/25"
+                                : "bg-gradient-to-r from-[#01356f] to-[#01356f] hover:from-[#081d3d] hover:to-[#081d3d] text-white shadow-blue-500/25",
+                            )}
+                          >
+                            {loading ? (
+                              <span className="flex items-center justify-center">
+                                <Square className="mr-3 h-6 w-6" />
+                                Parar Processo
+                              </span>
+                            ) : (
+                              <span className="flex items-center justify-center">
+                                <Play className="mr-3 h-6 w-6" />
+                                Gerar Cronograma
+                              </span>
+                            )}
+                          </Button>
                           </motion.div>
                         </div>
 
@@ -467,7 +472,7 @@ const fetchCronograma = useCallback(async () => {
                               disabled={!downloadReady}
                               variant="outline"
                               className={cn(
-                                "w-full py-6 rounded-xl border-2 text-lg font-medium transition-all duration-200",
+                                "w-full h-16 rounded-2xl border-2 text-lg font-bold transition-all duration-200",
                                 downloadReady
                                   ? "border-green-500 text-green-700 hover:bg-green-50 dark:border-green-600 dark:text-green-400 dark:hover:bg-green-900/20"
                                   : "border-gray-300 text-gray-400 dark:border-gray-700 dark:text-gray-500",
@@ -533,15 +538,36 @@ const fetchCronograma = useCallback(async () => {
                       <LogViewer logs={logs} />
                     </div>
 
-                    <div className="mt-6 flex justify-end">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setLogs([])}
-                        className="text-gray-600 dark:text-gray-400"
-                      >
-                        Limpar logs
-                      </Button>
+                    <div className="mt-6 flex justify-between">
+                      <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setLogs([])}
+                          className="text-gray-600 dark:text-gray-400 border-gray-300 hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-800 rounded-xl"
+                          disabled={loading}
+                        >
+                          🗑️ Limpar logs
+                        </Button>
+                      </motion.div>
+
+                      {loading && (
+                        <motion.div
+                          whileHover={{ scale: 1.05 }}
+                          whileTap={{ scale: 0.95 }}
+                          initial={{ opacity: 0, x: 20 }}
+                          animate={{ opacity: 1, x: 0 }}
+                        >
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={stopProcess}
+                            className="text-red-600 dark:text-red-400 border-red-300 hover:bg-red-50 dark:border-red-600 dark:hover:bg-red-900/20 rounded-xl"
+                          >
+                            🚫 Parar Processo
+                          </Button>
+                        </motion.div>
+                      )}
                     </div>
                   </div>
                 </motion.div>

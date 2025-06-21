@@ -10,7 +10,6 @@ from docx import Document
 from docx.shared import Pt, Cm, Inches
 from docx.enum.text import WD_PARAGRAPH_ALIGNMENT
 from docx.enum.table import WD_TABLE_ALIGNMENT, WD_ALIGN_VERTICAL
-from docx.enum.table import WD_ALIGN_VERTICAL
 from docx.oxml.ns import qn
 from collections import defaultdict
 import re, time
@@ -206,7 +205,6 @@ def extrair_dados(driver, apenas_fcte=False):
                 clean = re.sub(r'\s*\([^)]*\)', '', clean).strip()
                 salas = [clean] if clean == 'NIT/LDS' else [s.strip() for s in clean.split('/')]             
                    
-                # ===== NOVA LÓGICA DE ALOÇÃO DE SALAS =====
                 eventos = []
                 for cod_idx, cod in enumerate(cods):
                     convertido = converter_codigo(cod)
@@ -215,45 +213,40 @@ def extrair_dados(driver, apenas_fcte=False):
                     dias_list, periodos_list = convertido
                     for dia in dias_list:
                         for per in periodos_list:
-                            # Extrair horário de início para ordenação
                             inicio_str = per.split('–')[0].strip()
                             try:
                                 if 'h' in inicio_str:
                                     h, m = inicio_str.split('h')
                                     total_min = int(h)*60 + int(m)
                                 else:
-                                    total_min = int(inicio_str)*60  # Fallback
+                                    total_min = int(inicio_str)*60
                             except:
                                 total_min = 0
                             eventos.append((dia, per, total_min, cod_idx))
-                
-                # Ordenar eventos por dia e horário
+
                 eventos_ordenados = sorted(
                     eventos, 
                     key=lambda x: (DIAS_ORDEM.index(x[0]) if x[0] in DIAS_ORDEM else 99, x[2])
                 )
                 
-                # Verificar padrões de alocação
                 num_eventos = len(eventos_ordenados)
                 dias_unicos = sorted(set(e[0] for e in eventos_ordenados), 
                                     key=lambda d: DIAS_ORDEM.index(d))
                 num_dias = len(dias_unicos)
-                
-                # Distribuir salas
+
                 for idx, evento in enumerate(eventos_ordenados):
                     dia, per, _, cod_idx = evento
                     
-                    if len(salas) == len(cods):        # alocação por código (nova prioridade)
+                    if len(salas) == len(cods):        
                         sala = salas[cod_idx]
-                    elif len(salas) == num_dias:       # alocação por dia
+                    elif len(salas) == num_dias:       
                         sala_idx = dias_unicos.index(dia)
                         sala = salas[sala_idx]
-                    elif len(salas) == num_eventos:    # alocação por evento
+                    elif len(salas) == num_eventos:    
                         sala = salas[idx]
-                    else:                              # fallback cíclico
+                    else:                              
                         sala = salas[idx % len(salas)]
-                    
-                    # Registrar evento
+
                     inicio, fim = per.split('–')
                     sala_completa = f"FCTE - {sala.strip()}"
                     cron[sala_completa][dia].append({
@@ -263,14 +256,10 @@ def extrair_dados(driver, apenas_fcte=False):
                         'turma': turma,
                         'disciplina': nome_disciplina,
                         'docente': professor
-                    })
-                # ===== FIM DA NOVA LÓGICA =====
-                    
+                    })           
             except Exception as e:
                 print(f"[ERRO] Falha ao processar linha de turma: {e}")
-
         return cron
-
     except Exception as e:
         print(f"[ERRO CRÍTICO] Falha ao extrair dados da tabela: {e}")
         return defaultdict(lambda: defaultdict(list))
@@ -315,6 +304,7 @@ def definir_margens(doc, cm_valor):
         section.left_margin = Cm(cm_valor)
         section.right_margin = Cm(cm_valor)
 
+# === GERAÇÃO DO DOCX ===
 def gerar_docx(cronogramas, filename="Mapa_de_Salas.docx"):
     print(f"Gerando DOCX: {filename}")
     print(f"Total de salas a processar: {len(cronogramas)}")
@@ -331,7 +321,6 @@ def gerar_docx(cronogramas, filename="Mapa_de_Salas.docx"):
         else:
             dias_semana = dias_semana_base
 
-        # cria tabela com número de colunas baseado em dias_semana
         tabela = doc.add_table(rows=7, cols=len(dias_semana))
         tabela.alignment = WD_TABLE_ALIGNMENT.CENTER
         tabela.style = 'Table Grid'
@@ -344,11 +333,14 @@ def gerar_docx(cronogramas, filename="Mapa_de_Salas.docx"):
         # 1) Cabeçalho fixo com dias
         for col_idx, titulo in enumerate(dias_semana):
             cell = tabela.cell(0, col_idx)
-            cell.text = titulo
+            cell.text = ""  # Limpa qualquer conteúdo anterior
             cell.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
+
             p = cell.paragraphs[0]
             p.alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
-            p.runs[0].bold = True
+            run = p.add_run(titulo.upper())
+            run.bold = True
+            run.font.size = Pt(10)  
 
         # 2) Primeira coluna: horários fixos, altura exata
         for i, (inicio, fim) in enumerate(HORARIOS_FIXOS, start=1):
@@ -389,35 +381,30 @@ def gerar_docx(cronogramas, filename="Mapa_de_Salas.docx"):
                         # calcula duração do segmento dentro desta célula
                         overlap_inicio = max(mi, bi)
                         overlap_fim    = min(mf, bf)
-                        dur = overlap_fim - overlap_inicio  # em minutos
+                        dur = overlap_fim - overlap_inicio
 
                         if dur >= (bf - bi):  
-                            # ocupa a célula inteira
                             p = cell.paragraphs[0]
                             p.clear()
 
-                            # Código da disciplina (negrito, 14pt)
                             run_codigo = p.add_run(aula['codigo'])
                             run_codigo.bold = True
                             run_codigo.font.size = Pt(14)
 
                             p.add_run('\n')
 
-                            # TURMA em negrito, tamanho 13
                             run_turma = p.add_run(f"TURMA {aula['turma']}")
                             run_turma.bold = True
                             run_turma.font.size = Pt(13)
 
                             p.add_run('\n')
 
-                            # Nome da disciplina em itálico, tamanho 12
                             run_disc = p.add_run(aula['disciplina'].lstrip('-').strip().lower().title())
                             run_disc.italic = True
                             run_disc.font.size = Pt(12)
 
                             p.add_run('\n')
 
-                            # Nome do professor já como você faz:
                             run_prof = p.add_run(f"Prof. {aula['docente']}")
                             run_prof.font.size = Pt(10)
 
@@ -434,14 +421,12 @@ def gerar_docx(cronogramas, filename="Mapa_de_Salas.docx"):
 
                             p.add_run('\n')
 
-                            # TURMA em negrito, tamanho 13
                             run_turma = p.add_run(f"TURMA {aula['turma']}")
                             run_turma.bold = True
                             run_turma.font.size = Pt(13)
 
                             p.add_run('\n')
 
-                            # Nome da disciplina em itálico, tamanho 12
                             run_disc = p.add_run(aula['disciplina'].lstrip('-').strip().lower().title())
                             run_disc.italic = True
                             run_disc.font.size = Pt(12)
@@ -454,7 +439,6 @@ def gerar_docx(cronogramas, filename="Mapa_de_Salas.docx"):
                             p.alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
                             cell.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
 
-        # Espaço para próxima sala
         doc.add_paragraph()
 
     doc.save(filename)
@@ -472,7 +456,7 @@ def executar_scraping():
         cron_main = extrair_dados(driver)
         
         departamentos = [
-            "INSTITUTO DE FÍSICA - BRASÍLIA",
+            "INSTITUT DE FÍSICA - BRASÍLIA",
             "INSTITUTO DE QUÍMICA - BRASÍLIA",
             "DEPARTAMENTO DE MATEMÁTICA - BRASÍLIA",
             "DEPARTAMENTO DE ENGENHARIA MECANICA - BRASÍLIA",
