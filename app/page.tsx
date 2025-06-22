@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef } from "react"
 import { Button } from "@/components/ui/button"
-import { Calendar, Clock, School, FileText, AlertTriangle, Sparkles, Play, Square } from "lucide-react"
+import { Calendar, Clock, FileText, AlertTriangle, Sparkles, Play, Square } from "lucide-react"
 import { useToast } from "@/app/hooks/use-toast"
 import LogViewer from "@/components/log-viewer"
 import { motion, AnimatePresence } from "framer-motion"
