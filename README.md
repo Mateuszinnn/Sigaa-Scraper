@@ -1,99 +1,144 @@
-# 📄 Documentação do Gerador de Cronograma por Sala (SIGAA Web Scraper)
+# 📄 Gerador de Cronograma por Sala – SIGAA Web Scraper (com Interface Web)
 
-Este software realiza **web scraping da página de turmas do SIGAA/UnB**, coleta os dados de disciplinas, horários e salas de aula, e **gera automaticamente um documento Word (`Mapa_de_Salas.docx`)** com o cronograma de aulas organizado por sala.
+Este projeto acessa automaticamente o site do **SIGAA/UnB**, coleta os dados das **turmas, horários e salas de aula**, e gera um documento Word com o **cronograma de aulas por sala**.
+
+Você pode rodar esse sistema tanto pelo terminal (modo tradicional), quanto pela **interface web (mais amigável)** incluída no projeto.
 
 ---
 
 ## ✅ Pré-requisitos
 
-Certifique-se de ter o **Python 3.8+** instalado em sua máquina.
+Você precisará de **duas coisas instaladas** na sua máquina:
 
-Além disso, você deve instalar os pacotes listados no arquivo `requirements.txt` antes de executar o script.
+### 🐍 1. Python 3.8 ou superior
+
+Verifique se já tem:
+
+```bash
+python --version
+```
+
+Se não tiver, baixe aqui: [https://www.python.org/downloads/](https://www.python.org/downloads/)
+
+---
+
+### 🧭 2. Node.js (com npm)
+
+Este projeto usa o **Next.js**, que precisa do Node.js para funcionar.
+
+Verifique se já tem:
+
+```bash
+node -v
+npm -v
+```
+
+Se não tiver, baixe aqui: [https://nodejs.org/](https://nodejs.org/)
 
 ---
 
 ## 🛠️ Instalação dos pacotes
 
-Abra o terminal no diretório onde está localizado o projeto e execute:
+### 1. Instalar pacotes do Python
+
+Abra o terminal na pasta `app\scripts` e execute:
 
 ```bash
 pip install -r requirements.txt
 ```
 
-Isso instalará automaticamente as dependências necessárias, como:
-
-* `selenium`
-* `python-docx`
-* `pillow`
-* `webdriver-manager`
-  *(ou outros, conforme seu **`requirements.txt`**)*
+Isso instalará dependências como `selenium`, `python-docx`, `webdriver-manager` etc.
 
 ---
 
-## 🚀 Como executar
+### 2. Instalar pacotes do Frontend (Next.js)
 
-### No **Windows**
-
-Abra o terminal (Prompt de Comando ou PowerShell) e digite:
+Ainda na pasta raiz do projeto, instale as dependências do frontend com:
 
 ```bash
-python .\webscrp.py
-```
-
-### No **Linux / macOS**
-
-Abra o terminal e digite:
-
-```bash
-python ./webscrp.py
+npm install
 ```
 
 ---
 
-## 📁 Saída
+## 🚀 Como executar a aplicação completa
 
-Ao final da execução, será gerado o arquivo:
+### Passo 1: Iniciar o servidor da Interface Web (Next.js)
+
+Execute no terminal:
+
+```bash
+npm run dev
+```
+
+Isso iniciará a **interface gráfica**. Por padrão, ela ficará acessível em:
+
+```
+http://localhost:3000
+```
+
+---
+
+### Passo 2: Usar a Interface Web
+
+Abra o navegador e vá para `http://localhost:3000`.
+Na tela inicial, você verá um botão para iniciar o scraping.
+
+Quando você clicar para iniciar:
+
+* A interface faz uma chamada para a API interna (`/api/executar`);
+* O script Python será executado em segundo plano;
+* Ao final, o arquivo `Mapa_de_Salas.docx` será gerado automaticamente e ficará disponível para download.
+
+---
+
+## 📁 Saída esperada
+
+Um arquivo será criado:
 
 ```
 Mapa_de_Salas.docx
 ```
 
-Esse documento contém o cronograma de aulas por sala, organizado por dia da semana e horário.
+Este arquivo mostra todas as aulas organizadas por **sala**, separadas por **dia da semana** e **horário**.
 
 ---
 
-## ❗ Observações
+## ⚙️ Funcionamento interno (resumo técnico)
 
-* O script utiliza **navegação automatizada com Selenium**, portanto será aberta uma janela do navegador durante a execução.
-* É necessário ter o **Google Chrome** instalado, pois o Selenium será configurado automaticamente com `webdriver-manager`.
+* O **frontend** foi feito com **Next.js (React)**.
+* O botão "Gerar Cronograma" chama uma API interna (`/api/executar`), que executa o script `sigaa-scrapper.py` com `child_process`.
+* O **script Python** abre o Chrome, acessa o SIGAA, extrai os dados e gera o documento.
+* É possível ver o andamento do processo na tela de logs.
+* Quando o script terminar sua execução o docx ficará disponível para download.
 
 ---
 
-## ➕ Adicionando outros departamentos
+## ➕ Como incluir mais departamentos
 
-Se desejar incluir ou retirar outras turmas de departamentos da universidade além do padrão, você pode modificar a lista `extras` no código-fonte.
-
-Exemplo:
+Você pode modificar a variável `departamentos` no Python para buscar mais turmas:
 
 ```python
-extras = [
+departamentos = [
     "INSTITUTO DE FÍSICA - BRASÍLIA",
-    "INSTITUTO DE QUÍMICA - BRASÍLIA",
     "DEPARTAMENTO DE MATEMÁTICA - BRASÍLIA",
-    "DEPARTAMENTO DE ENGENHARIA MECANICA - BRASÍLIA",
-    "DEPTO CIÊNCIAS DA COMPUTAÇÃO - BRASÍLIA"
+    # ... outros departamentos
 ]
 ```
 
-Adicione o nome exato do departamento como aparece na lista do SIGAA. Isso fará com que essas turmas também sejam consideradas na geração do documento.
+---
+
+## 📏 Regras de Validação
+
+* Apenas **salas que começam com “FCTE ou FGA”** são incluídas.
+* Os nomes das salas devem estar **padronizados corretamente**.
 
 ---
 
-## Regras: 
+## 🧪 Modo alternativo: rodar sem o frontend
 
-* Todas as salas devem ter o prefixo FCTE
-* A quantidade de salas da turma deve ser um ou igual a quantidade de blocos do horario separados por "/" (slot de tempo sem intervalos)
-* O nome da salas devem estar padronizados
+Se preferir rodar apenas o script pelo terminal:
 
-
-
+```bash
+python sigaa-scrapper.py
+```
