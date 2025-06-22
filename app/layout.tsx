@@ -5,6 +5,9 @@ export const metadata: Metadata = {
   title: 'Sigaa Scrapper',
   description: 'Created with v0',
   generator: 'v0.dev',
+  icons: {
+    icon : '/logo.svg'
+  }
 }
 
 export default function RootLayout({
