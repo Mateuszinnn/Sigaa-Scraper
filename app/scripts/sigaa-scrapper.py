@@ -62,7 +62,7 @@ def selecionar_departamento_por_indice(wait, index):
         Select(wait.until(EC.presence_of_element_located((By.ID, "formTurma:inputNivel")))).select_by_index(2)
         Select(wait.until(EC.presence_of_element_located((By.ID, "formTurma:inputDepto")))).select_by_index(index)
         wait.until(EC.element_to_be_clickable((By.XPATH, "//input[@value='Buscar']"))).click()
-        time.sleep(5)
+        time.sleep(1)
     except (TimeoutException, NoSuchElementException, ElementClickInterceptedException, IndexError) as e:
         print(f"[ERRO] Falha ao selecionar departamento por índice {index}: {e}")
     except Exception as e:
@@ -80,7 +80,7 @@ def selecionar_departamento_por_nome(wait, nome):
             raise ValueError(f"Departamento com nome '{nome}' não encontrado.")
         
         wait.until(EC.element_to_be_clickable((By.XPATH, "//input[@value='Buscar']"))).click()
-        time.sleep(5)
+        time.sleep(1)
     except (TimeoutException, NoSuchElementException, ElementClickInterceptedException) as e:
         print(f"[ERRO] Falha ao selecionar departamento por nome '{nome}': {e}")
     except ValueError as e:
