@@ -5,7 +5,7 @@ import path from "path"
 export async function GET() {
   try {
     // Caminho para o arquivo DOCX gerado pelo script Python
-    const docxPath = path.join(process.cwd(), "Mapa_de_Salas.docx")
+    const docxPath = path.join(process.cwd(), "public", "Mapa_de_Salas.docx")
 
     // Verifica se o arquivo existe
     if (!fs.existsSync(docxPath)) {

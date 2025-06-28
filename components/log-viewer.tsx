@@ -26,7 +26,7 @@ const LogViewer = memo(function LogViewer({ logs }: LogViewerProps) {
   };
 
   const getLogStyle = (log: string) => {
-    if (log.startsWith("ERRO") || log.startsWith("[ERRO") ||log.includes("❌")) {
+    if (log.startsWith("ERRO") || log.startsWith("[ERRO") || log.startsWith("Erro") ||log.includes("❌")) {
       return "text-red-400 bg-red-900/20 border-l-4 border-red-500 pl-3"
     }
     if (log.includes("sucesso") ||log.includes("Documento") || log.includes("✅") || log.includes("concluído")) {
@@ -44,17 +44,21 @@ const LogViewer = memo(function LogViewer({ logs }: LogViewerProps) {
     if (log.startsWith("Processo interrompido") ||log.includes("🚫")) {
       return "text-red-400 bg-red-900/20 border-l-4 border-red-500 pl-3"
     }
+    if (log.includes("DISCIPLINA_INCONSISTENTE")) {
+      return "text-orange-400 bg-orange-900/20 border-l-4 border-orange-500 pl-3"
+    }
     return "text-green-300"
   }
 
   const getLogIcon = (log: string) => {
-    if (log.startsWith("ERRO:") || log.startsWith("[ERRO") || log.includes("❌")) return "❌"
+    if (log.startsWith("ERRO:") || log.startsWith("[ERRO") || log.startsWith("Erro") || log.includes("❌")) return "❌"
     if (log.includes("sucesso") || log.includes("✅")) return "✅"
     if (log.includes("Processando") || log.includes("🚀")) return "⚡"
     if (log.includes("Configurando")) return "⚙️"
     if (log.includes("Iniciando")) return "🚀"
     if (log.includes("Extraindo")) return "📝"
     if (log.includes("Processo interrompido")) return "🚫"
+    if (log.includes("DISCIPLINA_INCONSISTENTE")) return "⚠️"
     return "📝"
   }
 

@@ -91,10 +91,17 @@ export async function GET(request: NextRequest) {
 
         if (code === 0) {
           sendLog("Processamento concluído com sucesso!");
-          const docxPath = path.join(process.cwd(), "Mapa_de_Salas.docx");
+          const docxPath = path.join(process.cwd(), "public", "Mapa_de_Salas.docx");
 
           if (fs.existsSync(docxPath)) {
-            safeWrite(`data: ${JSON.stringify({ success: true, docxPath: "Mapa_de_Salas.docx" })}\n\n`);
+            const stats = fs.statSync(docxPath);
+            const lastModified = stats.mtime.toISOString(); // Envia no formato ISO
+
+            safeWrite(`data: ${JSON.stringify({
+              success: true,
+              docxPath: "Mapa_de_Salas.docx",
+              lastModified
+            })}\n\n`);
           } else {
             safeWrite(`data: ${JSON.stringify({ success: false, message: "Arquivo não gerado" })}\n\n`);
           }

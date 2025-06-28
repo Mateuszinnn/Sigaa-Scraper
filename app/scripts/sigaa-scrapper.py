@@ -234,18 +234,34 @@ def extrair_dados(driver, apenas_fcte=False):
                                     key=lambda d: DIAS_ORDEM.index(d))
                 num_dias = len(dias_unicos)
 
+                # Verificar se a disciplina é inconsistente
+                if not (
+                    len(salas) == len(cods) or
+                    len(salas) == num_dias or
+                    len(salas) == num_eventos or
+                    len(salas) == 1
+                ):
+                    print("[⚠️ DISCIPLINA_INCONSISTENTE] Turma:", turma)
+                    print("[⚠️ DISCIPLINA_INCONSISTENTE] Código:", codigo_disciplina)
+                    print("[⚠️ DISCIPLINA_INCONSISTENTE] Nome:", nome_disciplina)
+                    print("[⚠️ DISCIPLINA_INCONSISTENTE] Docente:", professor)
+                    print("[⚠️ DISCIPLINA_INCONSISTENTE] Códigos de horário:", cods)
+                    print("[⚠️ DISCIPLINA_INCONSISTENTE] Salas detectadas:", salas)
+                    print("[⚠️ DISCIPLINA_INCONSISTENTE] Dias únicos:", dias_unicos)
+                    print("[⚠️ DISCIPLINA_INCONSISTENTE] Nenhuma das combinações esperadas é válida, significa que o número de salas não corresponde à quantidade de códigos de horários, dias ou eventos da disciplina, e também não é uma única sala")
+
                 for idx, evento in enumerate(eventos_ordenados):
                     dia, per, _, cod_idx = evento
-                    
-                    if len(salas) == len(cods):        
+
+                    if len(salas) == len(cods):
                         sala = salas[cod_idx]
-                    elif len(salas) == num_dias:       
+                    elif len(salas) == num_dias:
                         sala_idx = dias_unicos.index(dia)
                         sala = salas[sala_idx]
-                    elif len(salas) == num_eventos:    
+                    elif len(salas) == num_eventos:
                         sala = salas[idx]
-                    else:                              
-                        sala = salas[idx % len(salas)]
+                    elif len(salas) == 1:
+                        sala = salas[0]
 
                     inicio, fim = per.split('–')
                     sala_completa = f"FCTE - {sala.strip()}"
@@ -256,7 +272,9 @@ def extrair_dados(driver, apenas_fcte=False):
                         'turma': turma,
                         'disciplina': nome_disciplina,
                         'docente': professor
-                    })           
+                    })
+
+         
             except Exception as e:
                 print(f"[ERRO] Falha ao processar linha de turma: {e}")
         return cron
@@ -304,22 +322,137 @@ def definir_margens(doc, cm_valor):
         section.left_margin = Cm(cm_valor)
         section.right_margin = Cm(cm_valor)
 
+ABBR_DISCIPLINAS = {
+    "Engenharia": "Eng.",
+    "Eletrônica": "Eletr.",
+    "Eletromagnetismo": "Elet.",
+    "Aplicada": "Apl.",
+    "Especiais": "Esp.",
+    "Tópicos": "Tóp.",
+    "Projeto": "Proj.",
+    "Computadores": "Comp.",
+    "Programação": "Prog.",
+    "Sistemas": "Sist.",
+    "Teoria": "Teor.",
+    "Fundamentos": "Fund.",
+    "Métodos": "Met.",
+    "Método": "Metó.",
+    "Estruturas": "Estrut.",
+    "Aeroespacial": "Aero.",
+    "Dispositivos": "Disp.",
+    "Energia": "Energ.",
+    "Digital": "Disc.",
+    "Desenvolvimento": "Desenv.",
+    "Desenho": "Des.",
+    "para": "p/",
+    "Laboratório" : "Lab."
+}
+
+MAPEAMENTO_SALAS_COMPLETAS = {
+    "AUDITÓRIO": "AUDITÓRIO – 245 – UAC",
+    "CONTAINER 04": "CONTAINER Nº 04 – 30 capacidade ",
+    "CONTEINER 04 - FUND VEÍCULOS ELÉTRICOS": "CONTAINER Nº 04 – 30 capacidade ",
+    "I1": "SALA I-1 – AT-49/41 (TV) – 45 – UAC",
+    "I2": "SALA I-2 – AT-42/48 – 70 – UAC",
+    "I3": "SALA I-3 – AT-39/48 – 70 – UAC",
+    "I4": "SALA I-4 – AT-32/41 (TV) – 45 – UAC",
+    "I5": "SALA I-5 – AT-29/41 (TV) – 45 – UAC",
+    "I6": "SALA I-6 – AT-22/48 LAB (Laptop) – 49 – UAC",
+    "I7": "SALA I-7 – AT-19/48 LAB (Laptop/Desktop) – 48 – UAC",
+    "I8": "SALA I-8 – AT-12/41 (TV) – 45 – UAC",
+    "I9": "SALA I-9 – AT-09/41 – 130 – UAC",
+    "I10": "SALA I-10 – AT-09/23 (LAB) – 80 – UAC",
+    "LAB ELET": "LAB. ELETRICIDADE – 20 – UED",
+    "LAB FÍSICA 1": "LAB. FÍSICA 1 – 25 - UED",
+    "LAB MATERIAIS": "LAB. MATERIAIS – 15 – UED",
+    "LAB NEI 1": "LAB. NEI 1 – 20 – UED",
+    "LAB NEI 2": "LAB. NEI 2 – 20 – UED",
+    "LAB OND": "LAB. FÍSICA 2 – 25 – UED",
+    "LAB QUIMICA": "LAB. QUÍMICA – 20 – UED",
+    "LAB SHP": "CONTAINER Nº 08 – LAB SHP",
+    "LAB SS": "LAB. SS – 35 – UED",
+    "LAB TERM": "LAB. TERMODINÂMICA – 25 – UED",
+    "LAB TERMD.": "LAB. TERMODINÂMICA – 25 – UED",
+    "LAB TERMOFLUIDOS": "LAB. TERMOFLUIDOS – 25 – UED",
+    "LAB. FÍSICA 1": "LAB. FÍSICA 1 – 25 - UED",
+    "LAB. MOCAP": "LAB. MOCAP – 80 – UED",
+    "LAB. TERMOD.": "LAB. TERMODINÂMICA – 25 – UED",
+    "LABORATÓRIO DE ELETRICIDADE": "LAB. ELETRICIDADE – 20 – UED",
+    "LDTEA 302": "LDTEA – Sala 302 – 25 capacidade",
+    "LDTEA 303": "LDTEA – Sala 303 – 25 capacidade",
+    "MOCAP": "LAB. MOCAP – 80 – UED",
+    "MULTIUSO": "SALA MULTIUSO – 25 – UAC",
+    "NIT/LDS": "LAB NIT/LDS – 12 – UED",
+    "S1": "SALA S-1 – A1-62/41 – 130 – UAC",
+    "S2": "SALA S-2 – A1-59/41 – 130 – UAC",
+    "S3": "SALA S-3 – A1-42/41 – 130 – UAC",
+    "S4": "SALA S-4 – A1-32/41 – 130 – UAC",
+    "S5": "SALA S-5 – A1-29/41 (TV) – 45 – UAC",
+    "S6": "SALA S-6 – A1-22/48 – 70 – UAC",
+    "S7": "SALA S-7 – A1-19/48 – 70 – UAC",
+    "S8": "SALA S-8 – A1-12/41 (TV) – 45 – UAC",
+    "S9": "SALA S-9 – A1-09/41 – 130 – UAC",
+    "S10": "SALA S-10 – A1-09/23 (LAB) – 80 – UAC",
+    "TERMO SUP": "LAB. TERMOFLUIDOS – 25 – UED"
+}
+
+def abbreviar_disciplina(nome_completo: str) -> str:
+    """
+    Substitui ocorrências de termos completos por suas abreviações (case-insensitive).
+    """
+    for completo, abbr in ABBR_DISCIPLINAS.items():
+        pattern = rf"(?i)\b{re.escape(completo)}\b"
+        nome_completo = re.sub(pattern, abbr, nome_completo)
+    return nome_completo
+
+def primeiro_ultimo_nome(nome_completo):
+    partes = nome_completo.strip().split()
+    if not partes:
+        return ""
+    if len(partes) == 1:
+        return partes[0]
+    return f"{partes[0]} {partes[-1]}"
+
+def nome_sala_completo(sala: str) -> str:
+    # Prioriza igualdade exata
+    if sala in MAPEAMENTO_SALAS_COMPLETAS:
+        return MAPEAMENTO_SALAS_COMPLETAS[sala]
+
+    # Depois tenta correspondência parcial, priorizando chaves maiores
+    for k in sorted(MAPEAMENTO_SALAS_COMPLETAS.keys(), key=len, reverse=True):
+        if k in sala:
+            return MAPEAMENTO_SALAS_COMPLETAS[k]
+
+    return sala  # fallback
+
 # === GERAÇÃO DO DOCX ===
 def gerar_docx(cronogramas, filename="Mapa_de_Salas.docx"):
     print(f"Gerando DOCX: {filename}")
     print(f"Total de salas a processar: {len(cronogramas)}")
     doc = Document()
+    section = doc.sections[0]
+    header = section.header
+    paragraph = header.paragraphs[0]
+    paragraph.alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
+    imagem_path = "public/Imagem1.png"
+    run = paragraph.add_run()
+    run.add_picture(imagem_path, width=Inches(6))
+
     set_font_times_new_roman(doc)
     definir_margens(doc, 0.5)
+
     for i, (sala, horarios) in enumerate(sorted(cronogramas.items()), start=1):
         print(f"[{i}/{len(cronogramas)}] Processando sala: {sala}")
-        doc.add_heading(f"Sala {sala}", level=1)
-        dias_semana_base = ["Horário", "Segunda", "Terça", "Quarta", "Quinta", "Sexta"]
-        inclui_sabado = "Sábado" in horarios
-        if inclui_sabado:
-            dias_semana = dias_semana_base + ["Sábado"]
-        else:
-            dias_semana = dias_semana_base
+        nome = nome_sala_completo(sala)
+        par = doc.add_paragraph()
+        par.alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
+        run = par.add_run(nome)
+        run.bold = True
+        run.font.name = 'Times New Roman'
+        run.font.size = Pt(14)
+
+        dias_base = ["Horário", "Segunda", "Terça", "Quarta", "Quinta", "Sexta"]
+        dias_semana = dias_base + (["Sábado"] if "Sábado" in horarios else [])
 
         tabela = doc.add_table(rows=7, cols=len(dias_semana))
         tabela.alignment = WD_TABLE_ALIGNMENT.CENTER
@@ -328,54 +461,48 @@ def gerar_docx(cronogramas, filename="Mapa_de_Salas.docx"):
         doc.add_page_break()
 
         for row in tabela.rows:
-            row.cells[0].width = Cm(2)
+            row.cells[0].width = Cm(2.2)
 
-        # 1) Cabeçalho fixo com dias
-        for col_idx, titulo in enumerate(dias_semana):
-            cell = tabela.cell(0, col_idx)
-            cell.text = ""  # Limpa qualquer conteúdo anterior
+        # Cabeçalho de dias
+        for idx, dia in enumerate(dias_semana):
+            cell = tabela.cell(0, idx)
+            cell.text = ""
             cell.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
-
             p = cell.paragraphs[0]
             p.alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
-            run = p.add_run(titulo.upper())
+            run = p.add_run(dia.upper())
             run.bold = True
-            run.font.size = Pt(10)  
+            run.font.size = Pt(10)
 
-        # 2) Primeira coluna: horários fixos, altura exata
-        for i, (inicio, fim) in enumerate(HORARIOS_FIXOS, start=1):
-            cell_h = tabela.cell(i, 0)
+        # Horários fixos
+        for idx, (inicio, fim) in enumerate(HORARIOS_FIXOS, start=1):
+            cell_h = tabela.cell(idx, 0)
             p = cell_h.paragraphs[0]
-            p.clear() 
-
+            # Limpa o parágrafo atual
+            p.clear()
             run_inicio = p.add_run(inicio)
             run_inicio.bold = True
-            run_inicio.font.size = Pt(13)
-            p.add_run('\n')
-
+            run_inicio.font.size = Pt(16)
+            p.add_run("\n")
             run_entre = p.add_run("às")
-            run_entre.font.size = Pt(13)
             run_entre.bold = True
-            p.add_run('\n')
-
+            run_entre.font.size = Pt(16)
+            p.add_run("\n")
             run_fim = p.add_run(fim)
-            run_fim.font.size = Pt(13)
             run_fim.bold = True
-
+            run_fim.font.size = Pt(16)
             p.alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
             cell_h.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
 
-        # 3) Preencher aulas
-        for dia_nome, aulas in horarios.items():
-            if dia_nome not in dias_semana:
+        # Preencher aulas com abreviações
+        for dia, aulas in horarios.items():
+            if dia not in dias_semana:
                 continue
-            col = dias_semana.index(dia_nome)
+            col = dias_semana.index(dia)
             for aula in aulas:
-                mi = horario_para_minutos(aula['inicio'])
-                mf = horario_para_minutos(aula['fim'])
+                mi, mf = horario_para_minutos(aula['inicio']), horario_para_minutos(aula['fim'])
                 for idx, (bi_str, bf_str) in enumerate(HORARIOS_FIXOS, start=1):
-                    bi = horario_para_minutos(bi_str)
-                    bf = horario_para_minutos(bf_str)
+                    bi, bf = horario_para_minutos(bi_str), horario_para_minutos(bf_str)
                     if mi < bf and mf > bi:
                         cell = tabela.cell(idx, col)
                         # calcula duração do segmento dentro desta célula
@@ -399,13 +526,17 @@ def gerar_docx(cronogramas, filename="Mapa_de_Salas.docx"):
 
                             p.add_run('\n')
 
-                            run_disc = p.add_run(aula['disciplina'].lstrip('-').strip().lower().title())
+                            nome_original = aula['disciplina'].lstrip('-').strip().lower().title()
+                            nome_abbr = abbreviar_disciplina(nome_original)
+                            run_disc = p.add_run(nome_abbr)
                             run_disc.italic = True
                             run_disc.font.size = Pt(12)
 
                             p.add_run('\n')
 
-                            run_prof = p.add_run(f"Prof. {aula['docente']}")
+                            nome_prof = primeiro_ultimo_nome(aula['docente'])
+                            run_prof = p.add_run(f"Prof. {nome_prof}")
+
                             run_prof.font.size = Pt(10)
 
                             p.alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
@@ -427,13 +558,16 @@ def gerar_docx(cronogramas, filename="Mapa_de_Salas.docx"):
 
                             p.add_run('\n')
 
-                            run_disc = p.add_run(aula['disciplina'].lstrip('-').strip().lower().title())
+                            nome_original = aula['disciplina'].lstrip('-').strip().lower().title()
+                            nome_abbr = abbreviar_disciplina(nome_original)
+                            run_disc = p.add_run(nome_abbr)
                             run_disc.italic = True
                             run_disc.font.size = Pt(12)
 
                             p.add_run('\n')
 
-                            run_prof = p.add_run(f"Prof. {aula['docente']}")
+                            nome_prof = primeiro_ultimo_nome(aula['docente'])
+                            run_prof = p.add_run(f"Prof. {nome_prof}")
                             run_prof.font.size = Pt(10)
 
                             p.alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
@@ -471,7 +605,7 @@ def executar_scraping():
                 for dia, aulas in d.items():
                     cron_main[s][dia].extend(aulas)
         
-        arquivo = "Mapa_de_Salas.docx"
+        arquivo = os.path.join("public", "Mapa_de_Salas.docx")
         gerar_docx(cron_main, arquivo)
         driver.quit()
         print("Processo de scraping concluído com sucesso!")
@@ -494,3 +628,14 @@ if __name__ == "__main__":
         print(f"Erro crítico: {str(e)}")
         print(traceback.format_exc())
         sys.exit(1)
+
+# logs para salas de 1 hr, logs para salas que ocupam msm horario e msm sala(optativo), 
+# mesclar turmas
+
+# implementado: 
+# lista de abreviaturas de disciplinas, 
+# primeiro e ultimo nome do prof, 
+# se o dox já tinha sido gerado há a possibilidade de baixa-lo sem gerar novamente, 
+# nome das salas por extenso, 
+# imagem no cabeçalho, 
+# logs para salas inconsistentes (nao acrescentar no word),

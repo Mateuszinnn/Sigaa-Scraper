@@ -141,6 +141,7 @@ export default function Home() {
   const eventSourceRef = useRef<EventSource | null>(null)
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const particleCount = useMemo(() => (isMobile ? 25 : 50), [isMobile])
+  const [lastGeneratedDate, setLastGeneratedDate] = useState<string | null>(null)
 
   // Efeito para animação de sucesso - otimizado
   useEffect(() => {
@@ -152,6 +153,23 @@ export default function Home() {
       return () => clearTimeout(timer)
     }
   }, [success])
+
+  useEffect(() => {
+  const checkDocxStatus = async () => {
+    try {
+      const res = await fetch("/api/status")
+      const data = await res.json()
+      if (data.exists) {
+        setDownloadReady(true)
+        setLastGeneratedDate(new Date(data.lastModified).toLocaleString("pt-BR"))
+      }
+    } catch (err) {
+      console.error("Erro ao verificar status do arquivo:", err)
+    }
+  }
+
+  checkDocxStatus()
+}, [])
 
   const stopProcess = useCallback(() => {
     if (eventSourceRef.current) {
@@ -194,6 +212,7 @@ const fetchCronograma = useCallback(async () => {
           setSuccess(true);
           setDownloadReady(true);
           setActiveTab("gerar");
+          setLastGeneratedDate(new Date(data.lastModified).toLocaleString("pt-BR"))
           toast({ title: "Sucesso!", description: "Cronograma gerado" });
         } else {
           setError(data.message || "Erro na geração");
@@ -482,6 +501,11 @@ const fetchCronograma = useCallback(async () => {
                               Baixar DOCX
                             </Button>
                           </motion.div>
+                          {lastGeneratedDate && (
+                            <p className="text-sm text-gray-500 dark:text-gray-400 mt-2 text-center">
+                              Arquivo gerado em: <span className="font-medium">{lastGeneratedDate}</span>
+                            </p>
+                          )}
                         </div>
                       </div>
 
