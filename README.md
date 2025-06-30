@@ -65,7 +65,7 @@ npm install
 
 ### Passo 1: Iniciar o servidor da Interface Web (Next.js) produção ou desenvolvimento
 
-Para executar em ambiente de desenvolvimento no terminal:
+Para executar em ambiente de desenvolvimento digite no terminal:
 
 ```bash
 npm run dev
@@ -77,7 +77,7 @@ Isso iniciará a **interface gráfica**. Por padrão, ela ficará acessível em:
 http://localhost:3000
 ```
 
-Para executar em ambiente de produção no terminal:
+Para executar em ambiente de produção digite no terminal:
 
 ```bash
 npm run build
