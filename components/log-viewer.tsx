@@ -45,7 +45,7 @@ const LogViewer = memo(function LogViewer({ logs }: LogViewerProps) {
       return "text-red-400 bg-red-900/20 border-l-4 border-red-500 pl-3"
     }
     if (log.includes("DISCIPLINA_INCONSISTENTE")) {
-      return "text-orange-400 bg-orange-900/20 border-l-4 border-orange-500 pl-3"
+      return "text-red-400 bg-red-900/20 border-l-4 border-red-500 pl-3"
     }
     return "text-green-300"
   }
