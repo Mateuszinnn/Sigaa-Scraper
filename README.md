@@ -63,7 +63,7 @@ npm install
 
 ## 🚀 Como executar a aplicação completa
 
-### Passo 1: Iniciar o servidor da Interface Web (Next.js) produção e desenvolvimento
+### Passo 1: Iniciar o servidor da Interface Web (Next.js) produção ou desenvolvimento
 
 Para executar em ambiente de desenvolvimento no terminal:
 
