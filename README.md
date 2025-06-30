@@ -71,12 +71,6 @@ Para executar em ambiente de desenvolvimento digite no terminal:
 npm run dev
 ```
 
-Isso iniciará a **interface gráfica**. Por padrão, ela ficará acessível em:
-
-```
-http://localhost:3000
-```
-
 Para executar em ambiente de produção digite no terminal:
 
 ```bash
