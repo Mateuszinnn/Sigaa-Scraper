@@ -241,15 +241,10 @@ def extrair_dados(driver, apenas_fcte=False):
                     len(salas) == num_eventos or
                     len(salas) == 1
                 ):
-                    print("[⚠️ DISCIPLINA_INCONSISTENTE] Turma:", turma)
-                    print("[⚠️ DISCIPLINA_INCONSISTENTE] Código:", codigo_disciplina)
-                    print("[⚠️ DISCIPLINA_INCONSISTENTE] Nome:", nome_disciplina)
-                    print("[⚠️ DISCIPLINA_INCONSISTENTE] Docente:", professor)
-                    print("[⚠️ DISCIPLINA_INCONSISTENTE] Códigos de horário:", cods)
-                    print("[⚠️ DISCIPLINA_INCONSISTENTE] Salas detectadas:", salas)
-                    print("[⚠️ DISCIPLINA_INCONSISTENTE] Dias únicos:", dias_unicos)
-                    print("[⚠️ DISCIPLINA_INCONSISTENTE] Nenhuma das combinações esperadas é válida, significa que o número de salas não corresponde à quantidade de códigos de horários, dias ou eventos da disciplina, e também não é uma única sala.")
-                    
+                    print(f"[DISCIPLINA_INCONSISTENTE] Código: {codigo_disciplina}, Turma: {turma}, Nome: {nome_disciplina}, Docente: {professor}, Códigos de horário: {cods}, Salas detectadas: {salas}, Dias únicos: {dias_unicos}")
+                    print("[DISCIPLINA_INCONSISTENTE] Nenhuma das combinações esperadas é válida, significa que o número de salas não corresponde à quantidade de códigos de horários, dias ou eventos da disciplina, e também não é uma única sala.")
+                    print("[DISCIPLINA_INCONSISTENTE] Favor verificar turma e adicionar ao documento manualmente!")
+
                 for idx, evento in enumerate(eventos_ordenados):
                     dia, per, _, cod_idx = evento
 
@@ -313,16 +308,6 @@ HORARIOS_FIXOS = [
 # Função utilitária para converter horário em minutos
 def horario_para_minutos(horario):
     return int(horario[:2]) * 60 + int(horario[3:])
-
-# Mapeia dias para colunas na tabela
-dia_para_coluna = {
-    "2": 1,  # Segunda
-    "3": 2,  # Terça
-    "4": 3,  # Quarta
-    "5": 4,  # Quinta
-    "6": 5,  # Sexta
-    "7": 6   # Sábado
-}
 
 # === FONTE ===
 def set_font_times_new_roman(doc):
@@ -442,11 +427,6 @@ def nome_sala_completo(sala: str) -> str:
             return MAPEAMENTO_SALAS_COMPLETAS[k]
     return sala  # fallback
 
-def minutos_para_hora(minutos):
-    horas = minutos // 60
-    minutos_restantes = minutos % 60
-    return f"{horas:02d}h{minutos_restantes:02d}"
-
 # === GERAÇÃO DO DOCX ===
 def gerar_docx(cronogramas, filename="Mapa_de_Salas.docx"):
     print(f"Gerando DOCX: {filename}")
@@ -513,8 +493,9 @@ def gerar_docx(cronogramas, filename="Mapa_de_Salas.docx"):
             run_fim = p.add_run(fim)
             run_fim.bold = True
             run_fim.font.size = Pt(16)
+            p.alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
+            cell_h.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
 
-        # 🔸 Nova estrutura para rastrear células ocupadas
         celulas_ocupadas = set()
 
         for dia, aulas in horarios.items():
@@ -586,8 +567,6 @@ def gerar_docx(cronogramas, filename="Mapa_de_Salas.docx"):
     print(f"Documento gerado: {filename}")
 
 # === MAIN ===
-import traceback
-
 def executar_scraping():
     try:
         print("Iniciando processo de scraping do SIGAA...")
@@ -636,8 +615,6 @@ if __name__ == "__main__":
         print(traceback.format_exc())
         sys.exit(1)
 
-# mesclar turmas
-
 # implementado: 
 # lista de abreviaturas de disciplinas, 
 # primeiro e ultimo nome do prof, 
@@ -645,3 +622,4 @@ if __name__ == "__main__":
 # nome das salas por extenso, 
 # imagem no cabeçalho, 
 # logs para salas inconsistentes (nao acrescentar no word),
+# mesclar turmas
