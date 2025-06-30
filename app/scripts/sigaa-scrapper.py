@@ -248,7 +248,7 @@ def extrair_dados(driver, apenas_fcte=False):
                     print("[⚠️ DISCIPLINA_INCONSISTENTE] Códigos de horário:", cods)
                     print("[⚠️ DISCIPLINA_INCONSISTENTE] Salas detectadas:", salas)
                     print("[⚠️ DISCIPLINA_INCONSISTENTE] Dias únicos:", dias_unicos)
-                    print("[⚠️ DISCIPLINA_INCONSISTENTE] Nenhuma das combinações esperadas é válida, significa que o número de salas não corresponde à quantidade de códigos de horários, dias ou eventos da disciplina, e também não é uma única sala")
+                    print("[⚠️ DISCIPLINA_INCONSISTENTE] Nenhuma das combinações esperadas é válida, significa que o número de salas não corresponde à quantidade de códigos de horários, dias ou eventos da disciplina, e também não é uma única sala.")
 
                 for idx, evento in enumerate(eventos_ordenados):
                     dia, per, _, cod_idx = evento
@@ -273,7 +273,6 @@ def extrair_dados(driver, apenas_fcte=False):
                         'disciplina': nome_disciplina,
                         'docente': professor
                     })
-
          
             except Exception as e:
                 print(f"[ERRO] Falha ao processar linha de turma: {e}")
@@ -422,7 +421,6 @@ def nome_sala_completo(sala: str) -> str:
     for k in sorted(MAPEAMENTO_SALAS_COMPLETAS.keys(), key=len, reverse=True):
         if k in sala:
             return MAPEAMENTO_SALAS_COMPLETAS[k]
-
     return sala  # fallback
 
 # === GERAÇÃO DO DOCX ===
@@ -454,7 +452,7 @@ def gerar_docx(cronogramas, filename="Mapa_de_Salas.docx"):
         dias_base = ["Horário", "Segunda", "Terça", "Quarta", "Quinta", "Sexta"]
         dias_semana = dias_base + (["Sábado"] if "Sábado" in horarios else [])
 
-        tabela = doc.add_table(rows=7, cols=len(dias_semana))
+        tabela = doc.add_table(rows=1 + len(HORARIOS_FIXOS) * 2, cols=len(dias_semana))
         tabela.alignment = WD_TABLE_ALIGNMENT.CENTER
         tabela.style = 'Table Grid'
         tabela.autofit = False
@@ -463,7 +461,6 @@ def gerar_docx(cronogramas, filename="Mapa_de_Salas.docx"):
         for row in tabela.rows:
             row.cells[0].width = Cm(2.2)
 
-        # Cabeçalho de dias
         for idx, dia in enumerate(dias_semana):
             cell = tabela.cell(0, idx)
             cell.text = ""
@@ -474,12 +471,13 @@ def gerar_docx(cronogramas, filename="Mapa_de_Salas.docx"):
             run.bold = True
             run.font.size = Pt(10)
 
-        # Horários fixos
-        for idx, (inicio, fim) in enumerate(HORARIOS_FIXOS, start=1):
-            cell_h = tabela.cell(idx, 0)
+        for idx, (inicio, fim) in enumerate(HORARIOS_FIXOS):
+            row1 = idx * 2 + 1
+            row2 = idx * 2 + 2
+            cell_h = tabela.cell(row1, 0).merge(tabela.cell(row2, 0))
             p = cell_h.paragraphs[0]
-            # Limpa o parágrafo atual
             p.clear()
+            p.alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
             run_inicio = p.add_run(inicio)
             run_inicio.bold = True
             run_inicio.font.size = Pt(16)
@@ -491,87 +489,70 @@ def gerar_docx(cronogramas, filename="Mapa_de_Salas.docx"):
             run_fim = p.add_run(fim)
             run_fim.bold = True
             run_fim.font.size = Pt(16)
-            p.alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
-            cell_h.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
 
-        # Preencher aulas com abreviações
+        # 🔸 Nova estrutura para rastrear células ocupadas
+        celulas_ocupadas = set()
+
         for dia, aulas in horarios.items():
             if dia not in dias_semana:
                 continue
             col = dias_semana.index(dia)
             for aula in aulas:
                 mi, mf = horario_para_minutos(aula['inicio']), horario_para_minutos(aula['fim'])
-                for idx, (bi_str, bf_str) in enumerate(HORARIOS_FIXOS, start=1):
+                for idx, (bi_str, bf_str) in enumerate(HORARIOS_FIXOS):
                     bi, bf = horario_para_minutos(bi_str), horario_para_minutos(bf_str)
-                    if mi < bf and mf > bi:
-                        cell = tabela.cell(idx, col)
-                        # calcula duração do segmento dentro desta célula
-                        overlap_inicio = max(mi, bi)
-                        overlap_fim    = min(mf, bf)
-                        dur = overlap_fim - overlap_inicio
+                    blocos = [(bi, bi + 50), (bi + 50, bf)]
+                    row1 = idx * 2 + 1
+                    row2 = idx * 2 + 2
 
-                        if dur >= (bf - bi):  
-                            p = cell.paragraphs[0]
-                            p.clear()
+                    ocup1 = mi < blocos[0][1] and mf > blocos[0][0]
+                    ocup2 = mi < blocos[1][1] and mf > blocos[1][0]
 
-                            run_codigo = p.add_run(aula['codigo'])
-                            run_codigo.bold = True
-                            run_codigo.font.size = Pt(14)
+                    if ocup1 and ocup2:
+                        cell = tabela.cell(row1, col).merge(tabela.cell(row2, col))
+                        celulas_ocupadas.add((row1, col))
+                        celulas_ocupadas.add((row2, col))
+                    elif ocup1:
+                        cell = tabela.cell(row1, col)
+                        celulas_ocupadas.add((row1, col))
+                    elif ocup2:
+                        cell = tabela.cell(row2, col)
+                        celulas_ocupadas.add((row2, col))
+                    else:
+                        continue
 
-                            p.add_run('\n')
+                    p = cell.paragraphs[0]
+                    p.clear()
+                    run_codigo = p.add_run(aula['codigo'])
+                    run_codigo.bold = True
+                    run_codigo.font.size = Pt(14)
+                    p.add_run('\n')
+                    run_turma = p.add_run(f"TURMA {aula['turma']}")
+                    run_turma.bold = True
+                    run_turma.font.size = Pt(13)
+                    p.add_run('\n')
+                    nome_original = aula['disciplina'].lstrip('-').strip().lower().title()
+                    nome_abbr = abbreviar_disciplina(nome_original)
+                    run_disc = p.add_run(nome_abbr)
+                    run_disc.italic = True
+                    run_disc.font.size = Pt(12)
+                    p.add_run('\n')
+                    nome_prof = primeiro_ultimo_nome(aula['docente'])
+                    run_prof = p.add_run(f"Prof. {nome_prof}")
+                    run_prof.font.size = Pt(10)
+                    p.alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
+                    cell.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
 
-                            run_turma = p.add_run(f"TURMA {aula['turma']}")
-                            run_turma.bold = True
-                            run_turma.font.size = Pt(13)
-
-                            p.add_run('\n')
-
-                            nome_original = aula['disciplina'].lstrip('-').strip().lower().title()
-                            nome_abbr = abbreviar_disciplina(nome_original)
-                            run_disc = p.add_run(nome_abbr)
-                            run_disc.italic = True
-                            run_disc.font.size = Pt(12)
-
-                            p.add_run('\n')
-
-                            nome_prof = primeiro_ultimo_nome(aula['docente'])
-                            run_prof = p.add_run(f"Prof. {nome_prof}")
-
-                            run_prof.font.size = Pt(10)
-
-                            p.alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
-                            cell.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
-
-                        else:
-                            p = cell.paragraphs[0]
-                            p.clear()
-
-                            run_codigo = p.add_run(aula['codigo'])
-                            run_codigo.bold = True
-                            run_codigo.font.size = Pt(14)
-
-                            p.add_run('\n')
-
-                            run_turma = p.add_run(f"TURMA {aula['turma']}")
-                            run_turma.bold = True
-                            run_turma.font.size = Pt(13)
-
-                            p.add_run('\n')
-
-                            nome_original = aula['disciplina'].lstrip('-').strip().lower().title()
-                            nome_abbr = abbreviar_disciplina(nome_original)
-                            run_disc = p.add_run(nome_abbr)
-                            run_disc.italic = True
-                            run_disc.font.size = Pt(12)
-
-                            p.add_run('\n')
-
-                            nome_prof = primeiro_ultimo_nome(aula['docente'])
-                            run_prof = p.add_run(f"Prof. {nome_prof}")
-                            run_prof.font.size = Pt(10)
-
-                            p.alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
-                            cell.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
+        # 🔸 Mescla automática das células vazias para parecerem inteiras
+        for idx in range(len(HORARIOS_FIXOS)):
+            row1 = idx * 2 + 1
+            row2 = idx * 2 + 2
+            for col in range(1, len(dias_semana)):  # coluna 0 é o horário
+                if ((row1, col) not in celulas_ocupadas) and ((row2, col) not in celulas_ocupadas):
+                    try:
+                        tabela.cell(row1, col).merge(tabela.cell(row2, col))
+                    except:
+                        pass  # Já mesclada ou erro ignorável
 
         doc.add_paragraph()
 
@@ -629,7 +610,6 @@ if __name__ == "__main__":
         print(traceback.format_exc())
         sys.exit(1)
 
-# logs para salas de 1 hr, logs para salas que ocupam msm horario e msm sala(optativo), 
 # mesclar turmas
 
 # implementado: 
