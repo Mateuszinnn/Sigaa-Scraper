@@ -375,7 +375,7 @@ const fetchCronograma = useCallback(async () => {
       <main className="container mx-auto py-8 px-4">
         <motion.div {...ANIMATION_CONFIG.headerAnimation} className="text-center mb-12">
           <div className="inline-flex items-center justify-center p-2">
-            <img src={logo.src} alt="Logo" />
+            <img src={logo.src} alt="Logo" width="220"/>
           </div>
           <h1 className="text-4xl md:text-5xl font-bold text-[#01356f] dark:text-[#01356f]">
             Sistema de Mapa de Salas
