@@ -249,7 +249,7 @@ def extrair_dados(driver, apenas_fcte=False):
                     print("[⚠️ DISCIPLINA_INCONSISTENTE] Salas detectadas:", salas)
                     print("[⚠️ DISCIPLINA_INCONSISTENTE] Dias únicos:", dias_unicos)
                     print("[⚠️ DISCIPLINA_INCONSISTENTE] Nenhuma das combinações esperadas é válida, significa que o número de salas não corresponde à quantidade de códigos de horários, dias ou eventos da disciplina, e também não é uma única sala.")
-
+                    
                 for idx, evento in enumerate(eventos_ordenados):
                     dia, per, _, cod_idx = evento
 
@@ -265,14 +265,33 @@ def extrair_dados(driver, apenas_fcte=False):
 
                     inicio, fim = per.split('–')
                     sala_completa = f"FCTE - {sala.strip()}"
-                    cron[sala_completa][dia].append({
+                    evento_novo = {
                         'inicio': inicio.strip(),
                         'fim': fim.strip(),
                         'codigo': codigo_disciplina,
                         'turma': turma,
                         'disciplina': nome_disciplina,
                         'docente': professor
-                    })
+                    }
+
+                    # Verifica se existe evento anterior contínuo e idêntico (exceto horários)
+                    eventos_dia = cron[sala_completa][dia]
+                    if eventos_dia:
+                        ultimo = eventos_dia[-1]
+                        if (
+                            ultimo['codigo'] == evento_novo['codigo'] and
+                            ultimo['turma'] == evento_novo['turma'] and
+                            ultimo['disciplina'] == evento_novo['disciplina'] and
+                            ultimo['docente'] == evento_novo['docente'] and
+                            horario_para_minutos(ultimo['fim']) in [horario_para_minutos(evento_novo['inicio']) - 10,
+                                                                    horario_para_minutos(evento_novo['inicio'])]
+                        ):
+                            # Mesclar horários: estende o fim
+                            ultimo['fim'] = evento_novo['fim']
+                        else:
+                            eventos_dia.append(evento_novo)
+                    else:
+                        eventos_dia.append(evento_novo)
          
             except Exception as e:
                 print(f"[ERRO] Falha ao processar linha de turma: {e}")
@@ -423,6 +442,11 @@ def nome_sala_completo(sala: str) -> str:
             return MAPEAMENTO_SALAS_COMPLETAS[k]
     return sala  # fallback
 
+def minutos_para_hora(minutos):
+    horas = minutos // 60
+    minutos_restantes = minutos % 60
+    return f"{horas:02d}h{minutos_restantes:02d}"
+
 # === GERAÇÃO DO DOCX ===
 def gerar_docx(cronogramas, filename="Mapa_de_Salas.docx"):
     print(f"Gerando DOCX: {filename}")
@@ -508,7 +532,10 @@ def gerar_docx(cronogramas, filename="Mapa_de_Salas.docx"):
                     ocup1 = mi < blocos[0][1] and mf > blocos[0][0]
                     ocup2 = mi < blocos[1][1] and mf > blocos[1][0]
 
-                    if ocup1 and ocup2:
+                    excecao_m5_t1 = mi == 720 and mf == 830 and bi == 720 
+                    excecao_t6_n1 = mi == 1080 and mf == 1190 and bi == 1080  
+
+                    if (ocup1 and ocup2) or excecao_m5_t1 or excecao_t6_n1:
                         cell = tabela.cell(row1, col).merge(tabela.cell(row2, col))
                         celulas_ocupadas.add((row1, col))
                         celulas_ocupadas.add((row2, col))
@@ -543,17 +570,16 @@ def gerar_docx(cronogramas, filename="Mapa_de_Salas.docx"):
                     p.alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
                     cell.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
 
-        # 🔸 Mescla automática das células vazias para parecerem inteiras
         for idx in range(len(HORARIOS_FIXOS)):
             row1 = idx * 2 + 1
             row2 = idx * 2 + 2
-            for col in range(1, len(dias_semana)):  # coluna 0 é o horário
+            for col in range(1, len(dias_semana)):  
                 if ((row1, col) not in celulas_ocupadas) and ((row2, col) not in celulas_ocupadas):
                     try:
                         tabela.cell(row1, col).merge(tabela.cell(row2, col))
                     except:
-                        pass  # Já mesclada ou erro ignorável
-
+                        pass 
+                    
         doc.add_paragraph()
 
     doc.save(filename)
