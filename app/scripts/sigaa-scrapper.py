@@ -244,6 +244,7 @@ def extrair_dados(driver, apenas_fcte=False):
                     print(f"[DISCIPLINA_INCONSISTENTE] Código: {codigo_disciplina}, Turma: {turma}, Nome: {nome_disciplina}, Docente: {professor}, Códigos de horário: {cods}, Salas detectadas: {salas}, Dias únicos: {dias_unicos}")
                     print("[DISCIPLINA_INCONSISTENTE] Nenhuma das combinações esperadas é válida, significa que o número de salas não corresponde à quantidade de códigos de horários, dias ou eventos da disciplina, e também não é uma única sala.")
                     print("[DISCIPLINA_INCONSISTENTE] Favor verificar turma e adicionar ao documento manualmente!")
+                    continue
 
                 for idx, evento in enumerate(eventos_ordenados):
                     dia, per, _, cod_idx = evento
