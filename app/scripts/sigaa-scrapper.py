@@ -18,6 +18,7 @@ import traceback
 import sys
 import io
 import os
+from bs4 import BeautifulSoup
 
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
 sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
@@ -197,8 +198,14 @@ def extrair_dados(driver, apenas_fcte=False):
                     continue
 
                 turma = cells[0].text.strip()
-                professor = re.sub(r'\s*\(\d+h\)', '', cells[2].text.strip())
-                professor = professor.lower().title()
+                html_professores = cells[2].get_attribute("innerHTML")
+                soup = BeautifulSoup(html_professores, "html.parser")
+                linhas = soup.stripped_strings
+                lista_professores = [
+                    re.sub(r'\s*\(\d+h\)', '', linha).strip().lower().title()
+                    for linha in linhas if linha.strip()
+                ]
+                professores_str = ", ".join(lista_professores)
                 cods = re.findall(r'\d+[MTN]+\d+', cells[3].text.strip())
 
                 clean = re.sub(r'^(?:FCTE|FGA)\s*-\s*', '', raw_sala)
@@ -241,7 +248,7 @@ def extrair_dados(driver, apenas_fcte=False):
                     len(salas) == num_eventos or
                     len(salas) == 1
                 ):
-                    print(f"[DISCIPLINA_INCONSISTENTE] Código: {codigo_disciplina}, Turma: {turma}, Nome: {nome_disciplina}, Docente: {professor}, Códigos de horário: {cods}, Salas detectadas: {salas}, Dias únicos: {dias_unicos}")
+                    print(f"[DISCIPLINA_INCONSISTENTE] Código: {codigo_disciplina}, Turma: {turma}, Nome: {nome_disciplina}, Docente: {professores_str}, Códigos de horário: {cods}, Salas detectadas: {salas}, Dias únicos: {dias_unicos}")
                     print("[DISCIPLINA_INCONSISTENTE] Nenhuma das combinações esperadas é válida, significa que o número de salas não corresponde à quantidade de códigos de horários, dias ou eventos da disciplina, e também não é uma única sala.")
                     print("[DISCIPLINA_INCONSISTENTE] Favor verificar turma e adicionar ao documento manualmente!")
                     continue
@@ -267,7 +274,7 @@ def extrair_dados(driver, apenas_fcte=False):
                         'codigo': codigo_disciplina,
                         'turma': turma,
                         'disciplina': nome_disciplina,
-                        'docente': professor
+                        'docente': professores_str
                     }
 
                     # Verifica se existe evento anterior contínuo e idêntico (exceto horários)

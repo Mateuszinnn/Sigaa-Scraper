@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Calendar, Clock, FileText, AlertTriangle, Sparkles, Play, Square } from "lucide-react"
 import { useToast } from "@/app/hooks/use-toast"
 import LogViewer from "@/components/log-viewer"
+import { YearSemesterSelector } from '@/components/YearSemesterSelector';
 import { motion, AnimatePresence } from "framer-motion"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
@@ -142,6 +143,8 @@ export default function Home() {
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const particleCount = useMemo(() => (isMobile ? 25 : 50), [isMobile])
   const [lastGeneratedDate, setLastGeneratedDate] = useState<string | null>(null)
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+  const [selectedSemester, setSelectedSemester] = useState(1);
 
   // Efeito para animação de sucesso - otimizado
   useEffect(() => {
@@ -411,12 +414,21 @@ const fetchCronograma = useCallback(async () => {
                 </TabsTrigger>
               </TabsList>
             </div>
-
+            <div className="max-w-8xl w-full mx-auto relative z-[9999]">
+              <div className="mb-8">
+                <YearSemesterSelector
+                  selectedYear={selectedYear}
+                  selectedSemester={selectedSemester}
+                  onYearChange={setSelectedYear}
+                  onSemesterChange={setSelectedSemester}
+                />
+              </div>
+            </div>
             <div className="grid grid-cols-1 gap-8">
               <TabsContent value="gerar" className="mt-0">
                 <motion.div
                   {...ANIMATION_CONFIG.tabContentAnimation}
-                  className="bg-white/10 dark:bg-white/5 backdrop-blur-2xl rounded-3xl shadow-2xl overflow-hidden border border-white/20"
+                  className="bg-white/10 dark:bg-white/5 backdrop-blur-2xl rounded-3xl shadow-2xl overflow-visible border border-white/20"
                   layout="position"
                 >
                   <div className="p-8">
