@@ -27,6 +27,8 @@ const CustomSelect: React.FC<CustomSelectProps> = ({
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const selectRef = useRef<HTMLDivElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+  const selectedOptionRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -38,6 +40,22 @@ const CustomSelect: React.FC<CustomSelectProps> = ({
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
+  useEffect(() => {
+  if (isOpen && listRef.current && selectedOptionRef.current) {
+    const timeout = setTimeout(() => {
+      const list = listRef.current!;
+      const selected = selectedOptionRef.current!;
+
+      const offset = selected.offsetTop - list.clientHeight / 2 + selected.clientHeight / 2;
+
+      list.scrollTo({ top: offset, behavior: 'smooth' });
+    }, 100); // 100ms delay para garantir que o dropdown já esteja visível
+
+    return () => clearTimeout(timeout);
+  }
+}, [isOpen]);
+
 
   const selectedOption = options.find(option => option.value === value);
 
@@ -71,16 +89,17 @@ const CustomSelect: React.FC<CustomSelectProps> = ({
             transition={{ duration: 0.15 }}
             className="absolute z-[9999] w-full mt-2 bg-white/90 dark:bg-gray-800/90 backdrop-blur-xl border border-white/30 dark:border-white/20 rounded-xl shadow-2xl overflow-visible"
           >
-            <div className="max-h-60 overflow-y-auto">
+            <div ref={listRef} className="max-h-60 overflow-y-auto overflow-x-hidden">
               {options.map((option, index) => (
                 <motion.button
                   key={option.value}
+                  ref={option.value === value ? selectedOptionRef : null}
                   type="button"
                   onClick={() => {
                     onChange(option.value);
                     setIsOpen(false);
                   }}
-                  className={`w-full px-4 py-3 text-left transition-all duration-150 ${
+                  className={`w-full px-4 py-3 text-left transition-all duration-150 rounded-t-xl rounded-b-xl ${
                     option.value === value
                       ? 'bg-blue-500/20 text-blue-700 dark:text-blue-300 font-medium'
                       : 'text-gray-900 dark:text-gray-100 hover:bg-white/30 dark:hover:bg-white/10'
@@ -109,7 +128,7 @@ export const YearSemesterSelector: React.FC<YearSemesterSelectorProps> = ({
   disabled = false,
 }) => {
   const currentYear = new Date().getFullYear();
-  const years = Array.from({ length: 10 }, (_, i) => currentYear - 5 + i);
+  const years = Array.from({ length: 20 }, (_, i) => currentYear - 10 + i);
   const semesters = [1, 2, 3, 4];
 
   const yearOptions = years.map(year => ({

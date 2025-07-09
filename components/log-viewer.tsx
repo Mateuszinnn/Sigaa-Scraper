@@ -26,16 +26,16 @@ const LogViewer = memo(function LogViewer({ logs }: LogViewerProps) {
   };
 
   const getLogStyle = (log: string) => {
-    if (log.startsWith("ERRO") || log.startsWith("[ERRO") || log.startsWith("Erro") ||log.includes("❌")) {
+    if (log.startsWith("ERRO") || log.startsWith("[ERRO") || log.startsWith("Erro") || log.startsWith("Não foram encontrados") ||log.includes("❌")) {
       return "text-red-400 bg-red-900/20 border-l-4 border-red-500 pl-3"
     }
-    if (log.includes("sucesso") ||log.includes("Documento") || log.includes("✅") || log.includes("concluído")) {
+    if (log.includes("sucesso") ||log.includes("Documento")  || log.includes("✅") || log.includes("concluído")) {
       return "text-green-400 bg-green-900/20 border-l-4 border-green-500 pl-3"
     }
     if (log.includes("Processando") || log.includes("departamento") || log.includes("🚀")) {
       return "text-yellow-400 bg-yellow-900/20 border-l-4 border-yellow-500 pl-3"
     }
-    if (log.includes("Configurando") || log.includes("Iniciando")) {
+    if (log.includes("Configurando") || log.includes("Iniciando") || log.includes("Definindo parâmetros:") || log.includes("Ano e período")) {
       return "text-blue-400 bg-blue-900/20 border-l-4 border-blue-500 pl-3"
     }
     if (log.includes("Extraindo") || log.includes("📝")) {
@@ -51,10 +51,11 @@ const LogViewer = memo(function LogViewer({ logs }: LogViewerProps) {
   }
 
   const getLogIcon = (log: string) => {
-    if (log.startsWith("ERRO:") || log.startsWith("[ERRO") || log.startsWith("Erro") || log.includes("❌")) return "❌"
+    if (log.startsWith("ERRO:") || log.startsWith("[ERRO") || log.startsWith("Erro") || log.startsWith("Não foram encontrados") || log.includes("❌")) return "❌"
     if (log.includes("sucesso") || log.includes("✅")) return "✅"
     if (log.includes("Processando") || log.includes("🚀")) return "⚡"
     if (log.includes("Configurando")) return "⚙️"
+    if (log.includes("Definindo parâmetros:") || log.includes("Ano e período")) return "🛠️"
     if (log.includes("Iniciando")) return "🚀"
     if (log.includes("Extraindo")) return "📝"
     if (log.includes("Processo interrompido")) return "🚫"

@@ -197,8 +197,22 @@ const fetchCronograma = useCallback(async () => {
   setSuccess(false);
   setDownloadReady(false);
 
+  if (eventSourceRef.current) {
+    eventSourceRef.current.close();
+    eventSourceRef.current = null;
+  }
+
   try {
-    const eventSource = new EventSource("/api/executar");
+    if (!selectedYear || !selectedSemester) {
+      toast({
+        title: "Erro",
+        description: "Selecione o ano e o semestre antes de gerar o cronograma.",
+        variant: "destructive",
+      });
+      setLoading(false);
+      return;
+    }
+    const eventSource = new EventSource(`/api/executar?year=${selectedYear}&semester=${selectedSemester}`);
     eventSourceRef.current = eventSource;
 
     eventSource.onmessage = (event: MessageEvent) => {
@@ -252,7 +266,7 @@ const fetchCronograma = useCallback(async () => {
     });
     setLoading(false);
   }
-}, [toast]);
+}, [selectedYear, selectedSemester, toast]);
 
 
   const downloadDocx = useCallback(async () => {

@@ -7,7 +7,8 @@ export async function GET(request: NextRequest) {
   const stream = new TransformStream();
   const writer = stream.writable.getWriter();
   const encoder = new TextEncoder();
-
+  const year = request.nextUrl.searchParams.get("year");
+  const semester = request.nextUrl.searchParams.get("semester");
   let isClosed = false;
 
   // Utilitários seguros para escrita e fechamento
@@ -36,11 +37,27 @@ export async function GET(request: NextRequest) {
     safeWrite(`data: ${JSON.stringify({ log: message })}\n\n`);
   };
 
+  if (!year || !semester) {
+    safeWrite(`data: ${JSON.stringify({ success: false, message: "Parâmetros year e semester são obrigatórios." })}\n\n`);
+    safeClose();
+    return new Response(stream.readable, {
+      headers: {
+        "Content-Type": "text/event-stream",
+        "Connection": "keep-alive",
+        "Cache-Control": "no-cache"
+      }
+    });
+  }
+
   (async () => {
     try {
       sendLog("Iniciando execução do script...");
-
-      const pythonProcess = spawn("python", ["-u", "app/scripts/sigaa-scrapper.py"], {
+      const pythonProcess = spawn("python", [
+        "-u",
+        "app/scripts/sigaa-scrapper.py",
+        year,
+        semester
+      ], {
         env: {
           ...process.env,
           PYTHONUNBUFFERED: "1",
@@ -49,6 +66,7 @@ export async function GET(request: NextRequest) {
         },
         stdio: ["pipe", "pipe", "pipe"]
       });
+
 
       // Encerra o processo caso o cliente aborte a requisição
       request.signal.addEventListener("abort", () => {

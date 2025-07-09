@@ -89,6 +89,21 @@ def selecionar_departamento_por_nome(wait, nome):
     except Exception as e:
         print(f"[ERRO INESPERADO] {e}")
 
+def definir_ano_e_periodo(driver, wait, ano: str, periodo: str):
+    try:
+        print(f"Definindo parâmetros: Ano {ano}, Período {periodo}...")
+
+        ano_input = wait.until(EC.presence_of_element_located((By.ID, "formTurma:inputAno")))
+        ano_input.clear()
+        ano_input.send_keys(ano)
+
+        periodo_select = Select(wait.until(EC.presence_of_element_located((By.ID, "formTurma:inputPeriodo"))))
+        periodo_select.select_by_value(periodo)
+
+        print("Ano e período configurados corretamente.")
+    except Exception as e:
+        print(f"[ERRO] Falha ao definir ano/período: {e}")
+
 # === LÓGICA DE CÓDIGOS DE HORÁRIO SUPORTANDO MULTI-TURNOS ===
 HORARIOS_BASE = {
     'M': {1: "08:00", 2: "09:00", 3: "10:00", 4: "11:00", 5: "12:00"},
@@ -299,6 +314,9 @@ def extrair_dados(driver, apenas_fcte=False):
             except Exception as e:
                 print(f"[ERRO] Falha ao processar linha de turma: {e}")
         return cron
+    except NoSuchElementException:
+        print("Não foram encontrados resultados para a busca com estes parâmetros.")
+        return defaultdict(lambda: defaultdict(list))
     except Exception as e:
         print(f"[ERRO CRÍTICO] Falha ao extrair dados da tabela: {e}")
         return defaultdict(lambda: defaultdict(list))
@@ -580,7 +598,11 @@ def executar_scraping():
         print("Iniciando processo de scraping do SIGAA...")
         driver, wait = configurar_driver()
         fechar_modal_cookies(wait)
+        ano = sys.argv[1] if len(sys.argv) > 1 else "2025"
+        periodo = sys.argv[2] if len(sys.argv) > 2 else "1"
+        definir_ano_e_periodo(driver, wait, ano, periodo)
         selecionar_departamento_por_indice(wait, 2)
+
         cron_main = extrair_dados(driver)
         
         departamentos = [
