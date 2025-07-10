@@ -65,18 +65,17 @@ const CustomSelect: React.FC<CustomSelectProps> = ({
         type="button"
         onClick={() => !disabled && setIsOpen(!isOpen)}
         disabled={disabled}
-        className="w-full appearance-none bg-white/20 dark:bg-white/10 backdrop-blur-sm border border-white/30 dark:border-white/20 rounded-xl px-4 py-3 pr-10 text-left text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-white/50 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 hover:border-white/50 hover:bg-white/30 dark:hover:bg-white/15"
+        className="relative w-full flex items-center justify-between bg-white/20 dark:bg-white/10 backdrop-blur-sm border border-white/30 dark:border-white/20 rounded-xl px-4 py-3 text-left text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-white/50 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 hover:border-white/50 hover:bg-white/30 dark:hover:bg-white/15"
         whileTap={{ scale: disabled ? 1 : 0.98 }}
       >
         <span className="block truncate">
           {selectedOption ? selectedOption.label : placeholder}
         </span>
         <motion.div
-          className="absolute right-3 top-1/2 transform -translate-y-1/2"
           animate={{ rotate: isOpen ? 180 : 0 }}
           transition={{ duration: 0.2 }}
         >
-          <ChevronDown className="h-5 w-5 text-gray-400" />
+          <ChevronDown className="h-6 w-6 text-gray-400" />
         </motion.div>
       </motion.button>
 
