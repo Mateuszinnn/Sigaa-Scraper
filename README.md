@@ -114,7 +114,7 @@ Este arquivo mostra todas as aulas organizadas por **sala**, separadas por **dia
 ## ⚙️ Funcionamento interno (resumo técnico)
 
 * O **frontend** foi feito com **Next.js (React)**.
-* O botão "Gerar Cronograma" chama uma API interna (`/api/executar`), que executa o script `sigaa-scrapper.py` com `child_process`.
+* O botão "Gerar Cronograma" chama uma API interna (`/api/executar?year=<ano de consulta>&semester=<periodo de consulta>`), que executa o script `sigaa-scrapper.py` com `child_process`.
 * O **script Python** abre o Chrome, acessa o SIGAA, extrai os dados e gera o documento.
 * É possível ver o andamento do processo na tela de logs.
 * Quando o script terminar sua execução o docx ficará disponível para download.
@@ -149,3 +149,5 @@ Se preferir rodar apenas o script pelo terminal:
 ```bash
 python sigaa-scrapper.py
 ```
+
+E por fim digite o ano e o periodo para consulta.

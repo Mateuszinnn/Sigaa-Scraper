@@ -462,7 +462,9 @@ def gerar_docx(cronogramas, filename="Mapa_de_Salas.docx"):
     header = section.header
     paragraph = header.paragraphs[0]
     paragraph.alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
-    imagem_path = "public/Imagem1.png"
+    BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+    imagem_path = os.path.join(BASE_DIR, "public", "Imagem1.png")
+
     run = paragraph.add_run()
     run.add_picture(imagem_path, width=Inches(6))
 
@@ -598,8 +600,13 @@ def executar_scraping():
         print("Iniciando processo de scraping do SIGAA...")
         driver, wait = configurar_driver()
         fechar_modal_cookies(wait)
-        ano = sys.argv[1] if len(sys.argv) > 1 else "2025"
-        periodo = sys.argv[2] if len(sys.argv) > 2 else "1"
+        if len(sys.argv) > 2:
+            ano = sys.argv[1]
+            periodo = sys.argv[2]
+        else:
+            ano = input("Digite o ano (ex: 2025): ").strip()
+            periodo = input("Digite o período (ex: 1 ou 2): ").strip()
+
         definir_ano_e_periodo(driver, wait, ano, periodo)
         selecionar_departamento_por_indice(wait, 2)
 
@@ -620,8 +627,8 @@ def executar_scraping():
             for s, d in cron_ex.items():
                 for dia, aulas in d.items():
                     cron_main[s][dia].extend(aulas)
-        
-        arquivo = os.path.join("public", "Mapa_de_Salas.docx")
+        BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+        arquivo = os.path.join(BASE_DIR, "public", "Mapa_de_Salas.docx")
         gerar_docx(cron_main, arquivo)
         driver.quit()
         print("Processo de scraping concluído com sucesso!")
